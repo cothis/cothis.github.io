@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>mino 수족관</title>
+    <style>
+        html {
+            background-color: aqua;
+        }
+
+        img {
+            width: 200px;
+            transition: 0.5s;
+        }
+    </style>
+    <script src="jquery-3.5.1.min.js"></script>
+    <script>
+        class Fish {
+            constructor(width, bgColor) {
+                this.posX = 0;
+                this.posY = 0;
+
+                width = width || Math.trunc(Math.random() * 150 + 50);
+
+                this.$el = $(`<img src="fish.png" alt="물고기">`);
+                this.$el.css("width", width);
+                if (bgColor !== undefined) {
+                    this.$el.css("background-color", bgColor).css("border-radius", "100px");
+                }
+                $(".pool").append(this.$el);
+            }
+
+            // get $el() {
+            //     return this.$el;
+            // }
+
+            //method
+            start() {
+                let self = this;
+                setInterval(function () {
+                    let dir = ["left", "up", "right", "down"];
+                    let dirIndex = Math.trunc(Math.random() * 4);
+                    let distance = Math.trunc(Math.random() * 50);
+                    self.move(dir[dirIndex], distance);
+                },500)
+            }
+
+            move(dir, distance) {
+                let moveX = 0;
+                let moveY = 0;
+                let rotY = 0;
+                let rotZ = 0;
+                switch (dir) {
+                    case "left":
+                        moveX = -distance;
+                        rotY = 180;
+                        break;
+                    case "right":
+                        moveX = distance;
+                        break;
+                    case "up":
+                        moveY = -distance;
+                        rotZ = -90;
+                        break;
+                    case "down":
+                        moveY = distance;
+                        rotZ = 90;
+                        break;
+                }
+                this.posX += moveX;
+                this.posY += moveY;
+                this.$el.css("transform", `translate(${this.posX}px,${this.posY}px) rotateY(${rotY}deg) rotateZ(${rotZ}deg)`);;
+            }
+        }
+
+
+        $(function () {
+            let user = new Fish(200, "blue");
+            
+            for(let i = 0; i < 20; i++) {
+                let fish = new Fish();
+                fish.start();
+            }
+
+
+            let dir = ["left", "up", "right", "down"];
+
+            $(document).keydown(function (event) {
+                let index = event.keyCode - 37;
+                if (index >= 0 && index < 4) {
+                    user.move(dir[index], 100);
+                    event.preventDefault();
+                }
+            });
+
+            dir.forEach(function (el) {
+                $("#" + el).click(function () {
+                    user.move(el, 100);
+                })
+            });
+
+        });
+    </script>
+</head>
+
+<body>
+    <div>
+        <button id="left">Left</button>
+        <button id="right">Right</button>
+        <button id="down">Down</button>
+        <button id="up">Up</button>
+    </div>
+    <div class="pool">
+    </div>
+
+
+</body>
+
+</html>
