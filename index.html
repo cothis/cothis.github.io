@@ -23,10 +23,12 @@
 
                 width = width || Math.trunc(Math.random() * 150 + 50);
 
-                this.$el = $(`<img src="fish.png" alt="물고기">`);
+                let imageId = Math.trunc(Math.random() * 10);
+
+                this.$el = $(`<img src="fishimages/fish${imageId}.png" alt="물고기">`);
                 this.$el.css("width", width);
                 if (bgColor !== undefined) {
-                    this.$el.css("background-color", bgColor).css("border-radius", "100px");
+                    this.$el.css("border", "1px dotted " + bgColor).css("border-radius", "100px");
                 }
                 $(".pool").append(this.$el);
             }
