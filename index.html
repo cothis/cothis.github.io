@@ -1,123 +1,214 @@
 <!DOCTYPE html>
 <html lang="ko">
-
 <head>
     <meta charset="UTF-8">
-    <title>mino 수족관</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escape Plan Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        html {
-            background-color: aqua;
-        }
+        :root { --primary: #4f46e5; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --accent: #6366f1; }
+        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 500px; }
+        .card { background: var(--card); border-radius: 16px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2 { font-weight: 800; margin: 0 0 15px 0; color: var(--primary); font-size: 1.3rem; display: flex; align-items: center; gap: 8px; }
 
-        img {
-            width: 200px;
-            transition: 0.5s;
-        }
+        label { display: block; font-size: 0.85rem; margin-bottom: 5px; font-weight: 600; color: #64748b; }
+        input, select { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem; box-sizing: border-box; }
+
+        .theme-selector { display: grid; grid-template-columns: 1fr; gap: 8px; max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        .theme-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        .theme-item input[type="checkbox"] { width: auto; margin: 0; }
+
+        .btn { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.2s; margin-bottom: 8px; }
+        .btn-secondary { background: #f1f5f9; color: #475569; }
+        .btn:active { transform: scale(0.98); opacity: 0.9; }
+
+        .result-item { background: #fff; border-left: 5px solid var(--primary); padding: 15px; margin-top: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .schedule-row { font-size: 0.9rem; margin-bottom: 5px; }
+        .time { font-weight: 700; color: var(--primary); }
+        .badge { font-size: 0.7rem; background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; }
+
+        hr { border: 0; border-top: 1px solid #f1f5f9; margin: 15px 0; }
+        .loading-spinner { text-align: center; color: #94a3b8; font-size: 0.9rem; padding: 10px; }
     </style>
-    <script src="jquery-3.5.1.min.js"></script>
-    <script>
-        class Fish {
-            constructor(width, bgColor) {
-                this.posX = 0;
-                this.posY = 0;
-
-                width = width || Math.trunc(Math.random() * 150 + 50);
-
-                let imageId = Math.trunc(Math.random() * 10);
-
-                this.$el = $(`<img src="fish${imageId}.png" alt="물고기">`);
-                this.$el.css("width", width);
-                if (bgColor !== undefined) {
-                    this.$el.css("border", "1px dotted " + bgColor).css("border-radius", "100px");
-                }
-                $(".pool").append(this.$el);
-            }
-
-            // get $el() {
-            //     return this.$el;
-            // }
-
-            //method
-            start() {
-                let self = this;
-                setInterval(function () {
-                    let dir = ["left", "up", "right", "down"];
-                    let dirIndex = Math.trunc(Math.random() * 4);
-                    let distance = Math.trunc(Math.random() * 50);
-                    self.move(dir[dirIndex], distance);
-                },500)
-            }
-
-            move(dir, distance) {
-                let moveX = 0;
-                let moveY = 0;
-                let rotY = 0;
-                let rotZ = 0;
-                switch (dir) {
-                    case "left":
-                        moveX = -distance;
-                        rotY = 0;
-                        break;
-                    case "right":
-                        moveX = distance;
-                        rotY = 180;
-                        break;
-                    case "up":
-                        moveY = -distance;
-                        rotZ = -90;
-                        break;
-                    case "down":
-                        moveY = distance;
-                        rotZ = 90;
-                        break;
-                }
-                this.posX += moveX;
-                this.posY += moveY;
-                this.$el.css("transform", `translate(${this.posX}px,${this.posY}px) rotateY(${rotY}deg) rotateZ(${rotZ}deg)`);;
-            }
-        }
-
-
-        $(function () {
-            let user = new Fish(200, "blue");
-            
-            for(let i = 0; i < 20; i++) {
-                let fish = new Fish();
-                fish.start();
-            }
-
-
-            let dir = ["left", "up", "right", "down"];
-
-            $(document).keydown(function (event) {
-                let index = event.keyCode - 37;
-                if (index >= 0 && index < 4) {
-                    user.move(dir[index], 100);
-                    event.preventDefault();
-                }
-            });
-
-            dir.forEach(function (el) {
-                $("#" + el).click(function () {
-                    user.move(el, 100);
-                })
-            });
-
-        });
-    </script>
 </head>
-
 <body>
-    <div>
-        <button id="left">Left</button>
-        <button id="right">Right</button>
-        <button id="down">Down</button>
-        <button id="up">Up</button>
-    </div>
-    <div class="pool">
+
+<div class="container">
+    <div class="card" id="addSection">
+        <h2>➕ 새 테마 등록</h2>
+        <input type="text" id="newName" placeholder="테마명 (예: CLAIM)">
+        <input type="text" id="newShop" placeholder="매장명 (예: 키이스케이프 로그)">
+        <input type="number" id="newDuration" placeholder="소요시간 (분)">
+        <input type="text" id="newSlots" placeholder="시간표 (쉼표로 구분: 10:00, 11:20)">
+        <button class="btn" onclick="addThemeToSheet()">시트에 저장 및 새로고침</button>
     </div>
 
+    <div class="card">
+        <h2>⚙️ 일정 설정</h2>
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;">
+                <label>시작 가능 시간</label>
+                <input type="time" id="startTime" value="17:25">
+            </div>
+            <div style="flex:1;">
+                <label>목표 개수</label>
+                <select id="targetCount">
+                    <option value="2">2개</option>
+                    <option value="3" selected>3개</option>
+                    <option value="4">4개</option>
+                </select>
+            </div>
+        </div>
 
+        <label>🧩 테마 선택 (중복 선택 가능)</label>
+        <div id="themeSelector" class="theme-selector">
+            <div class="loading-spinner">데이터 로딩 중...</div>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;">
+                <label>동일매장 간격</label>
+                <input type="number" id="sameGap" value="10">
+            </div>
+            <div style="flex:1;">
+                <label>타매장 간격</label>
+                <input type="number" id="diffGap" value="25">
+            </div>
+        </div>
+
+        <button class="btn" style="background: #1e293b;" onclick="runCalculation()">최적 일정 계산</button>
+    </div>
+
+    <div id="resultContainer"></div>
+</div>
+
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzfaTfY9fUJp5jcCWWtZHLjKAuxK88yAyjTfylY7NgPCA7WxwwOXSt7vEBbov2evxOdQg/exec";
+    let themeDB = {};
+
+    // 시트에서 데이터 가져오기
+    async function loadThemes() {
+        const selector = document.getElementById('themeSelector');
+        try {
+            const res = await fetch(SCRIPT_URL);
+            const data = await res.json();
+            selector.innerHTML = '';
+            themeDB = {}; // 초기화
+
+            data.forEach(item => {
+                themeDB[item.name] = {
+                    shop: item.shop,
+                    duration: parseInt(item.duration),
+                    slots: String(item.slots).split(',').map(s => s.trim())
+                };
+
+                const div = document.createElement('div');
+                div.className = 'theme-item';
+                div.innerHTML = `<input type="checkbox" value="${item.name}"> <span>${item.name} <small style="color:#94a3b8">(${item.shop})</small></span>`;
+                selector.appendChild(div);
+            });
+        } catch(e) {
+            selector.innerHTML = '<div class="loading-spinner">데이터를 불러오지 못했습니다.</div>';
+        }
+    }
+
+    // 시트에 새 테마 추가
+    async function addThemeToSheet() {
+        const name = document.getElementById('newName').value;
+        const shop = document.getElementById('newShop').value;
+        const duration = document.getElementById('newDuration').value;
+        const slots = document.getElementById('newSlots').value;
+
+        if(!name || !shop || !duration || !slots) return alert("모든 정보를 입력해주세요.");
+
+        const btn = document.querySelector('#addSection .btn');
+        btn.innerText = "저장 중...";
+        btn.disabled = true;
+
+        try {
+            await fetch(SCRIPT_URL, {
+                method: "POST",
+                body: JSON.stringify({ name, shop, duration, slots })
+            });
+            alert("저장되었습니다!");
+            // 입력창 초기화
+            document.getElementById('newName').value = '';
+            document.getElementById('newShop').value = '';
+            document.getElementById('newDuration').value = '';
+            document.getElementById('newSlots').value = '';
+            loadThemes(); // 목록 새로고침
+        } catch(e) {
+            alert("저장 실패!");
+        } finally {
+            btn.innerText = "시트에 저장 및 새로고침";
+            btn.disabled = false;
+        }
+    }
+
+    // --- 연방 알고리즘 로직 (이전과 동일) ---
+    function runCalculation() {
+        const selectedNames = Array.from(document.querySelectorAll('#themeSelector input:checked')).map(el => el.value);
+        const targetCount = parseInt(document.getElementById('targetCount').value);
+        const startTimeLimit = document.getElementById('startTime').value;
+        const sameGap = parseInt(document.getElementById('sameGap').value);
+        const diffGap = parseInt(document.getElementById('diffGap').value);
+
+        if (selectedNames.length < targetCount) return alert(`최소 ${targetCount}개를 선택하세요.`);
+
+        let validResults = [];
+        const combis = getCombinations(selectedNames, targetCount);
+        combis.forEach(set => {
+            getPermutations(set).forEach(order => {
+                findSchedule(0, [], startTimeLimit, null, order, sameGap, diffGap, validResults);
+            });
+        });
+        renderResults(validResults);
+    }
+
+    function findSchedule(idx, currentSched, lastEnd, lastShop, order, sameGap, diffGap, validResults) {
+        if (idx === order.length) {
+            validResults.push({ schedule: [...currentSched], endTime: lastEnd });
+            return;
+        }
+        const data = themeDB[order[idx]];
+        data.slots.forEach(slot => {
+            const gap = (lastShop === data.shop) ? sameGap : diffGap;
+            const startDt = new Date(`2026-01-01T${slot}`);
+            const compareTime = lastEnd || document.getElementById('startTime').value;
+            const prevEndPlusGap = new Date(new Date(`2026-01-01T${compareTime}`).getTime() + (lastEnd ? gap : 0) * 60000);
+
+            if (startDt >= prevEndPlusGap) {
+                const endDt = new Date(startDt.getTime() + data.duration * 60000);
+                const endTimeStr = endDt.toTimeString().slice(0, 5);
+                currentSched.push({ name: order[idx], shop: data.shop, start: slot, end: endTimeStr });
+                findSchedule(idx + 1, currentSched, endTimeStr, data.shop, order, sameGap, diffGap, validResults);
+                currentSched.pop();
+            }
+        });
+    }
+
+    function renderResults(results) {
+        results.sort((a, b) => a.endTime.localeCompare(b.endTime));
+        const container = document.getElementById('resultContainer');
+        container.innerHTML = `<h3 style="margin-left:5px;">검색 결과 ${results.length}건</h3>`;
+        results.slice(0, 10).forEach((res, i) => {
+            const card = document.createElement('div');
+            card.className = 'result-item';
+            let html = `<strong>추천 ${i+1} <small>(종료 ${res.endTime})</small></strong><hr>`;
+            res.schedule.forEach(s => {
+                html += `<div class="schedule-row"><span class="time">${s.start}~${s.end}</span> <b>${s.name}</b> <span class="badge">${s.shop}</span></div>`;
+            });
+            card.innerHTML = html;
+            container.appendChild(card);
+        });
+        if(results.length === 0) container.innerHTML = "<p style='text-align:center; color:#94a3b8;'>조건에 맞는 일정이 없습니다.</p>";
+    }
+
+    function getCombinations(arr, n) { if (n === 1) return arr.map(v => [v]); const res = []; arr.forEach((fixed, idx, origin) => { const rest = origin.slice(idx + 1); const combis = getCombinations(rest, n - 1); combis.forEach(c => res.push([fixed, ...c])); }); return res; }
+    function getPermutations(arr) { if (arr.length === 1) return [arr]; const res = []; arr.forEach((fixed, idx, origin) => { const rest = [...origin.slice(0, idx), ...origin.slice(idx + 1)]; const perms = getPermutations(rest); perms.forEach(p => res.push([fixed, ...p])); }); return res; }
+
+    loadThemes();
+</script>
 </body>
-
 </html>
