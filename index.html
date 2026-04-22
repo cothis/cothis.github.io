@@ -15,9 +15,14 @@
         label { display: block; font-size: 0.85rem; margin-bottom: 5px; font-weight: 600; color: #64748b; }
         input, select { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem; box-sizing: border-box; }
 
-        .theme-selector { display: grid; grid-template-columns: 1fr; gap: 8px; max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
-        .theme-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
-        .theme-item input[type="checkbox"] { width: auto; margin: 0; }
+        .theme-selector { display: grid; grid-template-columns: 1fr; gap: 8px; max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        .theme-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        .theme-item input[type="checkbox"] { width: auto; margin-top: 4px; }
+        .theme-meta { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+        .slot-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+        .slot-badge { border-radius: 999px; padding: 4px 8px; font-size: 0.8rem; line-height: 1; cursor: pointer; user-select: none; border: 1px solid #e2e8f0; }
+        .slot-badge.on { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+        .slot-badge.off { background: #f8fafc; color: #64748b; opacity: 0.7; }
 
         .btn { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.2s; margin-bottom: 8px; }
         .btn-secondary { background: #f1f5f9; color: #475569; }
@@ -35,13 +40,65 @@
 <body>
 
 <div class="container">
-    <div class="card" id="addSection">
-        <h2>➕ 새 테마 등록</h2>
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button id="toggleAddBtn" class="btn" style="flex:1;" onclick="toggleAddSection()">테마 등록</button>
+        <button id="toggleManageBtn" class="btn btn-secondary" style="flex:1;" onclick="toggleManageBar()">테마 수정</button>
+    </div>
+    <div class="card" id="addSection" style="display:none;">
+        <h2 id="formTitle">➕ 새 테마 등록</h2>
+        <label for="newName">테마명</label>
         <input type="text" id="newName" placeholder="테마명 (예: CLAIM)">
+        <label for="newShop">매장명</label>
         <input type="text" id="newShop" placeholder="매장명 (예: 키이스케이프 로그)">
+        <label for="newDuration">소요시간(분)</label>
         <input type="number" id="newDuration" placeholder="소요시간 (분)">
-        <input type="text" id="newSlots" placeholder="시간표 (쉼표로 구분: 10:00, 11:20)">
-        <button class="btn" onclick="addThemeToSheet()">시트에 저장 및 새로고침</button>
+        <label for="newSlotTime">시간표 추가</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <input type="time" id="newSlotTime" step="300" style="flex:1;">
+            <button class="btn btn-secondary" style="width:auto; padding:10px 12px;" onclick="addSlot('new')">추가</button>
+        </div>
+        <div id="newSlotBadges" class="slot-badges" style="margin:8px 0 6px 0;"></div>
+        <small style="display:block; color:#64748b; margin:4px 0;">또는 CSV/공백으로 여러 시간 입력 가능</small>
+        <label for="newSlots">CSV/공백 입력</label>
+        <input type="text" id="newSlots" placeholder="예: 10:00, 10:30 11:00">
+        <button class="btn btn-secondary" style="margin-top:4px;" onclick="applyCsv('new')">CSV 적용</button>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+            <button id="formSaveBtn" class="btn" style="flex:1;" onclick="saveThemeFromForm()">시트에 저장 및 새로고침</button>
+            <button id="formDeleteBtn" class="btn btn-secondary" style="flex:1; background:#ef4444; color:white; display:none;" onclick="deleteFromForm()">삭제</button>
+        </div>
+    </div>
+
+    <div id="manageBar" class="card" style="padding:12px; display:none;">
+        <div style="display:flex; gap:8px; align-items:center;">
+            <select id="manageThemeSelect" style="flex:1; padding:10px;"></select>
+            <button class="btn btn-secondary" style="width:auto; padding:10px 12px;" onclick="manageEdit()">수정</button>
+            <button class="btn btn-secondary" style="width:auto; padding:10px 12px;" onclick="manageDelete()">삭제</button>
+        </div>
+    </div>
+
+    <div class="card" id="editSection" style="display:none;">
+        <h2>✏️ 테마 수정</h2>
+        <label for="editName">테마명</label>
+        <input type="text" id="editName" placeholder="테마명">
+        <label for="editShop">매장명</label>
+        <input type="text" id="editShop" placeholder="매장명">
+        <label for="editDuration">소요시간(분)</label>
+        <input type="number" id="editDuration" placeholder="소요시간 (분)">
+        <label for="editSlotTime">시간표 추가</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <input type="time" id="editSlotTime" step="300" style="flex:1;">
+            <button class="btn btn-secondary" style="width:auto; padding:10px 12px;" onclick="addSlot('edit')">추가</button>
+        </div>
+        <div id="editSlotBadges" class="slot-badges" style="margin:8px 0 6px 0;"></div>
+        <small style="display:block; color:#64748b; margin:4px 0;">또는 CSV/공백으로 여러 시간 입력 가능</small>
+        <label for="editSlots">CSV/공백 입력</label>
+        <input type="text" id="editSlots" placeholder="예: 10:00, 10:30 11:00">
+        <button class="btn btn-secondary" style="margin-top:4px;" onclick="applyCsv('edit')">CSV 적용</button>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+            <button class="btn" style="flex:1;" onclick="saveEdit()">저장</button>
+            <button class="btn btn-secondary" style="flex:1; background:#ef4444; color:white;" onclick="deleteFromEdit()">삭제</button>
+            <button class="btn btn-secondary" style="flex:1;" onclick="closeEditSection()">닫기</button>
+        </div>
     </div>
 
     <div class="card">
@@ -49,7 +106,7 @@
         <div style="display:flex; gap:10px;">
             <div style="flex:1;">
                 <label>시작 가능 시간</label>
-                <input type="time" id="startTime" value="17:25">
+                <input type="time" id="startTime" value="17:25" step="300">
             </div>
             <div style="flex:1;">
                 <label>목표 개수</label>
@@ -62,6 +119,7 @@
         </div>
 
         <label>🧩 테마 선택 (중복 선택 가능)</label>
+        <div id="consistencySummary" style="font-size:0.8rem; color:#64748b; margin:6px 0 6px 2px;"></div>
         <div id="themeSelector" class="theme-selector">
             <div class="loading-spinner">데이터 로딩 중...</div>
         </div>
@@ -86,6 +144,430 @@
 <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzfaTfY9fUJp5jcCWWtZHLjKAuxK88yAyjTfylY7NgPCA7WxwwOXSt7vEBbov2evxOdQg/exec";
     let themeDB = {};
+    // 각 테마별 제외한 시간 저장 (세션 한정)
+    const excludedSlots = {}; // { [themeName]: Set<string> }
+
+    // 시작 가능 시간 퍼시스턴스 (localStorage)
+    const START_TIME_KEY = 'epp.startTime';
+    function saveStartTime() {
+        try {
+            const el = document.getElementById('startTime');
+            if (!el || !el.value) return;
+            localStorage.setItem(START_TIME_KEY, el.value);
+        } catch (e) { /* storage disabled */ }
+    }
+    function restoreStartTime() {
+        try {
+            const saved = localStorage.getItem(START_TIME_KEY);
+            if (!saved) return;
+            if (!isValidTimeStr(saved)) return;
+            const el = document.getElementById('startTime');
+            if (el) el.value = saved;
+        } catch (e) { /* ignore */ }
+    }
+    function setupStartTimePersistence() {
+        restoreStartTime();
+        const el = document.getElementById('startTime');
+        if (el) {
+            el.addEventListener('change', saveStartTime);
+            el.addEventListener('input', saveStartTime);
+        }
+    }
+
+    // 유틸: 시간 파싱/검증/정렬
+    function isValidTimeStr(s) {
+        if (typeof s !== 'string') return false;
+        const m = s.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+        return !!m;
+    }
+    function toMinutes(s) { const [h, m] = s.split(":" ).map(Number); return h*60 + m; }
+    function fromMinutes(min) { const h = Math.floor(min/60).toString().padStart(2,'0'); const m = (min%60).toString().padStart(2,'0'); return `${h}:${m}`; }
+
+    // 5분 단위 스냅/검증 유틸
+    function isFiveMinuteTime(s){ if(!isValidTimeStr(s)) return false; const mm = parseInt(s.split(':')[1],10); return mm % 5 === 0; }
+    function roundTo5MinutesStr(s){
+        if(!isValidTimeStr(s)) return s;
+        const [hhStr, mmStr] = s.split(':');
+        let hh = parseInt(hhStr,10); let mm = parseInt(mmStr,10);
+        let rounded = Math.round(mm/5)*5;
+        if (rounded === 60){ hh += 1; rounded = 0; }
+        if (hh >= 24){ hh = 23; rounded = 55; }
+        const H = String(hh).padStart(2,'0');
+        const M = String(rounded).padStart(2,'0');
+        return `${H}:${M}`;
+    }
+    function enforceFiveMinuteStepOn(el){
+        if(!el) return;
+        el.setAttribute('step','300');
+        const handler = ()=>{
+            const v = (el.value||'').trim();
+            if(!v) return;
+            if(!isValidTimeStr(v) || !isFiveMinuteTime(v)){
+                const snapped = roundTo5MinutesStr(v);
+                if(isValidTimeStr(snapped)) el.value = snapped;
+            }
+        };
+        el.addEventListener('change', handler);
+        el.addEventListener('input', handler);
+        el.addEventListener('blur', handler);
+        // 초기 스냅도 수행
+        handler();
+    }
+    function setupFiveMinuteEnforcement(){
+        enforceFiveMinuteStepOn(document.getElementById('startTime'));
+        enforceFiveMinuteStepOn(document.getElementById('newSlotTime'));
+        enforceFiveMinuteStepOn(document.getElementById('editSlotTime'));
+    }
+
+    function toggleAddSection() {
+        const sec = document.getElementById('addSection');
+        const btn = document.getElementById('toggleAddBtn');
+        if (!sec || !btn) return;
+        const visible = sec.style.display !== 'none';
+        if (visible) {
+            sec.style.display = 'none';
+            btn.innerText = '테마 등록';
+        } else {
+            // open in ADD mode by default
+            setFormMode('add');
+            sec.style.display = 'block';
+            btn.innerText = '테마 등록 닫기';
+            document.getElementById('newName')?.focus();
+        }
+    }
+    function toggleManageBar() {
+        const sec = document.getElementById('manageBar');
+        const btn = document.getElementById('toggleManageBtn');
+        if (!sec || !btn) return;
+        const visible = sec.style.display !== 'none';
+        sec.style.display = visible ? 'none' : 'block';
+        btn.innerText = visible ? '테마 수정' : '테마 수정 닫기';
+        if (!visible) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // --- 슬롯 빌더 공통 유틸 ---
+    function uniqSortTimes(arr){
+        const a = Array.from(new Set((arr||[]).filter(isValidTimeStr)));
+        a.sort((x,y)=>toMinutes(x)-toMinutes(y));
+        return a;
+    }
+    function getSlotsFromInput(prefix){
+        const val = document.getElementById(prefix+'Slots')?.value || '';
+        return normalizeSlots(val);
+    }
+    function setSlotsToInput(prefix, arr){
+        const el = document.getElementById(prefix+'Slots');
+        if (el) el.value = uniqSortTimes(arr).join(' ');
+    }
+    function renderSlotBadges(prefix){
+        const wrap = document.getElementById(prefix+'SlotBadges');
+        if (!wrap) return;
+        const list = getSlotsFromInput(prefix);
+        wrap.innerHTML = '';
+        list.forEach(t=>{
+            const span = document.createElement('span');
+            span.className = 'slot-badge on';
+            span.title = '클릭하면 제거';
+            span.textContent = t;
+            span.onclick = ()=> removeSlot(prefix, t);
+            wrap.appendChild(span);
+        });
+    }
+    function addSlot(prefix){
+        const timeEl = document.getElementById(prefix+'SlotTime');
+        if (!timeEl) return;
+        let t = (timeEl.value||'').trim();
+        if (!isValidTimeStr(t)) { alert('HH:MM 형식의 시간을 선택하세요.'); return; }
+        // 5분 단위로 스냅
+        t = roundTo5MinutesStr(t);
+        const current = getSlotsFromInput(prefix);
+        current.push(t);
+        const next = uniqSortTimes(current);
+        setSlotsToInput(prefix, next);
+        renderSlotBadges(prefix);
+    }
+    function applyCsv(prefix){
+        const parsed = getSlotsFromInput(prefix);
+        const current = parsed; // CSV 입력을 기준으로 설정
+        setSlotsToInput(prefix, current);
+        renderSlotBadges(prefix);
+    }
+    function removeSlot(prefix, t){
+        const current = getSlotsFromInput(prefix).filter(x=>x!==t);
+        setSlotsToInput(prefix, current);
+        renderSlotBadges(prefix);
+    }
+
+    // --- 통합 폼 모드 관리 (추가/수정 공유) ---
+    let formMode = 'add'; // 'add' | 'edit'
+    let currentEditOldName = null;
+    function resetFormFields(){
+        ['newName','newShop','newDuration','newSlots','newSlotTime'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+        const badgeWrap = document.getElementById('newSlotBadges');
+        if (badgeWrap) badgeWrap.innerHTML = '';
+    }
+    function setFormMode(mode, name){
+        formMode = mode;
+        const title = document.getElementById('formTitle');
+        const saveBtn = document.getElementById('formSaveBtn');
+        const delBtn = document.getElementById('formDeleteBtn');
+        const toggleBtn = document.getElementById('toggleAddBtn');
+        const sec = document.getElementById('addSection');
+        if (mode === 'add') {
+            currentEditOldName = null;
+            if (title) title.textContent = '➕ 새 테마 등록';
+            if (saveBtn) saveBtn.textContent = '시트에 저장 및 새로고침';
+            if (delBtn) delBtn.style.display = 'none';
+            resetFormFields();
+            renderSlotBadges('new');
+        } else if (mode === 'edit') {
+            const data = themeDB[name];
+            if (!data) { alert('해당 테마를 찾을 수 없습니다.'); return; }
+            currentEditOldName = name;
+            if (title) title.textContent = '✏️ 테마 수정';
+            if (saveBtn) saveBtn.textContent = '수정 저장';
+            if (delBtn) delBtn.style.display = 'block';
+            document.getElementById('newName').value = name;
+            document.getElementById('newShop').value = data.shop ?? '';
+            document.getElementById('newDuration').value = data.duration ?? '';
+            document.getElementById('newSlots').value = (data.slots || []).join(' ');
+            renderSlotBadges('new');
+        }
+        if (sec) sec.style.display = 'block';
+        if (toggleBtn) toggleBtn.innerText = '폼 닫기';
+        sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function saveThemeFromForm(){
+        const name = document.getElementById('newName').value;
+        const shop = document.getElementById('newShop').value;
+        const duration = document.getElementById('newDuration').value;
+        const slots = document.getElementById('newSlots').value;
+
+        if (formMode === 'add') {
+            const existingNames = new Set(Object.keys(themeDB));
+            const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots }, { existingNames });
+            if (!ok) { alert(errors.join('\n')); return; }
+            const btn = document.getElementById('formSaveBtn');
+            btn.textContent = '저장 중...';
+            btn.disabled = true;
+            try {
+                const payload = { action: 'add', name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                alert('저장되었습니다!');
+                themeDB[normalized.name] = { shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
+                renderThemeListFromDB();
+                resetFormFields();
+                // 폼 닫기
+                const sec = document.getElementById('addSection');
+                const tbtn = document.getElementById('toggleAddBtn');
+                if (sec && tbtn) { sec.style.display = 'none'; tbtn.innerText = '테마 등록'; }
+            } catch (e) {
+                alert('저장 실패!');
+            } finally {
+                btn.textContent = '시트에 저장 및 새로고침';
+                btn.disabled = false;
+            }
+        } else {
+            if (!currentEditOldName) { alert('수정할 테마가 선택되지 않았습니다.'); return; }
+            const existing = new Set(Object.keys(themeDB).filter(n => n !== currentEditOldName));
+            const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots }, { existingNames: existing });
+            if (!ok) { alert(errors.join('\n')); return; }
+            const renamed = normalized.name !== currentEditOldName;
+            if (renamed) {
+                if (excludedSlots[currentEditOldName]) {
+                    excludedSlots[normalized.name] = excludedSlots[currentEditOldName];
+                    delete excludedSlots[currentEditOldName];
+                }
+                delete themeDB[currentEditOldName];
+            }
+            themeDB[normalized.name] = { shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
+            renderThemeListFromDB();
+            // 닫기
+            const sec = document.getElementById('addSection');
+            const tbtn = document.getElementById('toggleAddBtn');
+            if (sec && tbtn) { sec.style.display = 'none'; tbtn.innerText = '테마 등록'; }
+            // 시트 업데이트
+            try {
+                const payload = { action: 'update', oldName: currentEditOldName, name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+            } catch (e) { /* ignore */ }
+            currentEditOldName = null;
+            formMode = 'add';
+        }
+    }
+
+    function deleteFromForm(){
+        if (!currentEditOldName) { alert('삭제할 테마가 선택되지 않았습니다.'); return; }
+        const target = currentEditOldName;
+        // 닫기 먼저
+        const sec = document.getElementById('addSection');
+        const tbtn = document.getElementById('toggleAddBtn');
+        if (sec && tbtn) { sec.style.display = 'none'; tbtn.innerText = '테마 등록'; }
+        currentEditOldName = null;
+        formMode = 'add';
+        deleteTheme(target);
+    }
+
+    function viewSlots(name) {
+        const t = themeDB[name];
+        if (!t) return alert('해당 테마를 찾을 수 없습니다.');
+        const list = (t.slots || []).join(', ');
+        alert(`${name} (${t.shop}, ${t.duration}분)\n시간표: ${list || '없음'}`);
+    }
+    function normalizeSlots(slotsStr) {
+        const raw = String(slotsStr || '').trim();
+        if (!raw) return [];
+        // 1) Replace common separators to spaces for tokenization
+        let s = raw
+            .replace(/[，、;\n\t]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .replace(/[·ㆍ]/g, ' ');
+        // 2) Normalize patterns like 13.35 or 13-35 or 13시35분 to 13:35
+        s = s.replace(/(\d{1,2})\s*[\.:\-h시]\s*(\d{2})/g, (m, h, m2) => `${h}:${m2}`);
+        // 3) Split by comma or space
+        const tokens = s.split(/[ ,]/).filter(Boolean);
+        // 4) Extract any HH:MM-looking substrings from tokens as a last resort
+        const times = [];
+        const re = /\b([01]?\d|2[0-3]):([0-5]\d)\b/;
+        tokens.forEach(t => {
+            const m = t.match(re);
+            if (m) times.push(`${m[1].padStart(2,'0')}:${m[2]}`);
+        });
+        const unique = Array.from(new Set(times));
+        unique.sort((a,b) => toMinutes(a)-toMinutes(b));
+        return unique;
+    }
+    function validateTheme({name, shop, duration, slots}, options = {}) {
+        const errors = [];
+        const out = { name: String(name||'').trim(), shop: String(shop||'').trim() };
+        const d = parseInt(duration, 10);
+        if (!out.name) errors.push('테마명이 비어있습니다.');
+        if (!out.shop) errors.push('매장명이 비어있습니다.');
+        if (!Number.isFinite(d) || d <= 0) errors.push('소요시간은 1 이상의 정수여야 합니다.');
+        out.duration = Number.isFinite(d) && d > 0 ? d : NaN;
+        const normSlots = Array.isArray(slots) ? slots : normalizeSlots(slots);
+        if (normSlots.length === 0) errors.push('올바른 시간표(HH:MM)가 1개 이상 필요합니다.');
+        out.slots = normSlots;
+        if (options && options.existingNames) {
+            const exists = options.existingNames.has(out.name);
+            if (exists && !options.allowExistingName) errors.push('이미 존재하는 테마명입니다.');
+        }
+        return { ok: errors.length === 0, errors, normalized: out };
+    }
+
+    function renderThemeListFromDB() {
+        const selector = document.getElementById('themeSelector');
+        // 현재 선택 상태 유지
+        const prevSelected = new Set(Array.from(selector.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value));
+        selector.innerHTML = '';
+        const entries = Object.entries(themeDB).sort((a,b)=>a[0].localeCompare(b[0]));
+        let invalidCount = 0;
+        entries.forEach(([name, data]) => {
+            const { ok, errors } = validateTheme({ name, shop: data.shop, duration: data.duration, slots: data.slots }, { allowExistingName: true });
+            if (!ok) invalidCount++;
+
+            const row = document.createElement('div');
+            row.className = 'theme-item';
+
+            // 체크박스
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = name;
+            cb.disabled = !ok;
+            if (prevSelected.has(name) && ok) cb.checked = true;
+            row.appendChild(cb);
+
+            // 메타 + 배지
+            const meta = document.createElement('div');
+            meta.className = 'theme-meta';
+            const title = document.createElement('div');
+            const warn = ok ? '' : `(비정상: ${errors[0]})`;
+            title.innerHTML = `${name} <small style="color:#94a3b8">(${data.shop}, ${data.duration}분)</small> ${ok ? '' : `<small style='color:#ef4444'>${warn}</small>`}`;
+            meta.appendChild(title);
+
+            // 슬롯 배지 영역
+            const badges = document.createElement('div');
+            badges.className = 'slot-badges';
+            const exSet = excludedSlots[name] || new Set();
+            (data.slots || []).forEach(slot => {
+                const span = document.createElement('span');
+                const isOff = exSet.has(slot);
+                span.className = `slot-badge ${isOff ? 'off' : 'on'}`;
+                span.title = isOff ? '클릭하여 포함' : '클릭하여 제외';
+                span.textContent = `${slot}`;
+                span.onclick = () => toggleSlot(name, slot);
+                badges.appendChild(span);
+            });
+            meta.appendChild(badges);
+
+            row.appendChild(meta);
+            selector.appendChild(row);
+        });
+        const sum = document.getElementById('consistencySummary');
+        const total = entries.length;
+        sum.textContent = total ? `총 ${total}개, 비정상 ${invalidCount}개 (비정상 항목은 선택 불가)` : '';
+
+        // 관리바도 함께 갱신
+        renderManagementBar();
+    }
+
+    async function postToSheet(payload) {
+        try {
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+            return true;
+        } catch(e) { return false; }
+    }
+
+    // 관리바 렌더링
+    function renderManagementBar() {
+        const sel = document.getElementById('manageThemeSelect');
+        if (!sel) return;
+        const prev = sel.value;
+        sel.innerHTML = '';
+        const names = Object.keys(themeDB).sort((a,b)=>a.localeCompare(b));
+        names.forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n; opt.textContent = `${n} (${themeDB[n].shop})`;
+            sel.appendChild(opt);
+        });
+        if (prev && names.includes(prev)) sel.value = prev;
+    }
+    function manageEdit() {
+        const sel = document.getElementById('manageThemeSelect');
+        if (!sel || !sel.value) return alert('수정할 테마를 선택하세요.');
+        openEditSection(sel.value);
+    }
+    function manageDelete() {
+        const sel = document.getElementById('manageThemeSelect');
+        if (!sel || !sel.value) return alert('삭제할 테마를 선택하세요.');
+        deleteTheme(sel.value);
+    }
+
+    // --- 테마 수정 진입포인트 (통합 폼 사용) ---
+    function openEditSection(name) {
+        setFormMode('edit', name);
+    }
+    function closeEditSection() {
+        const sec = document.getElementById('addSection');
+        const btn = document.getElementById('toggleAddBtn');
+        if (sec && btn) { sec.style.display = 'none'; btn.innerText = '테마 등록'; }
+    }
+    async function saveEdit() {
+        formMode = 'edit';
+        await saveThemeFromForm();
+    }
+    function deleteFromEdit() {
+        deleteFromForm();
+    }
+
+    // 슬롯 토글
+    function toggleSlot(name, slot) {
+        if (!excludedSlots[name]) excludedSlots[name] = new Set();
+        const set = excludedSlots[name];
+        if (set.has(slot)) set.delete(slot); else set.add(slot);
+        renderThemeListFromDB();
+    }
 
     // 시트에서 데이터 가져오기
     async function loadThemes() {
@@ -97,17 +579,11 @@
             themeDB = {}; // 초기화
 
             data.forEach(item => {
-                themeDB[item.name] = {
-                    shop: item.shop,
-                    duration: parseInt(item.duration),
-                    slots: String(item.slots).split(',').map(s => s.trim())
-                };
-
-                const div = document.createElement('div');
-                div.className = 'theme-item';
-                div.innerHTML = `<input type="checkbox" value="${item.name}"> <span>${item.name} <small style="color:#94a3b8">(${item.shop})</small></span>`;
-                selector.appendChild(div);
+                const slots = normalizeSlots(item.slots);
+                const duration = parseInt(item.duration, 10);
+                themeDB[item.name] = { shop: item.shop, duration, slots };
             });
+            renderThemeListFromDB();
         } catch(e) {
             selector.innerHTML = '<div class="loading-spinner">데이터를 불러오지 못했습니다.</div>';
         }
@@ -120,30 +596,89 @@
         const duration = document.getElementById('newDuration').value;
         const slots = document.getElementById('newSlots').value;
 
-        if(!name || !shop || !duration || !slots) return alert("모든 정보를 입력해주세요.");
+        const existingNames = new Set(Object.keys(themeDB));
+        const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots }, { existingNames });
+        if (!ok) { alert(errors.join('\n')); return; }
 
         const btn = document.querySelector('#addSection .btn');
         btn.innerText = "저장 중...";
         btn.disabled = true;
 
         try {
-            await fetch(SCRIPT_URL, {
-                method: "POST",
-                body: JSON.stringify({ name, shop, duration, slots })
-            });
+            const payload = { action: 'add', name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
+            await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify(payload) });
             alert("저장되었습니다!");
+            // 로컬 DB에도 즉시 반영
+            themeDB[normalized.name] = { shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
+            renderThemeListFromDB();
             // 입력창 초기화
             document.getElementById('newName').value = '';
             document.getElementById('newShop').value = '';
             document.getElementById('newDuration').value = '';
             document.getElementById('newSlots').value = '';
-            loadThemes(); // 목록 새로고침
+            renderSlotBadges('new');
+            // 폼 접기
+            const add = document.getElementById('addSection');
+            const tbtn = document.getElementById('toggleAddBtn');
+            if (add && tbtn) { add.style.display = 'none'; tbtn.innerText = '테마 등록'; }
         } catch(e) {
             alert("저장 실패!");
         } finally {
             btn.innerText = "시트에 저장 및 새로고침";
             btn.disabled = false;
         }
+    }
+
+    // 테마 수정/삭제
+    async function editTheme(oldName) {
+        const data = themeDB[oldName];
+        if (!data) return alert('해당 테마를 찾을 수 없습니다.');
+        const name = prompt('테마명', oldName);
+        if (name === null) return; // 취소
+        const shop = prompt('매장명', data.shop ?? '');
+        if (shop === null) return;
+        const duration = prompt('소요시간(분)', String(data.duration ?? ''));
+        if (duration === null) return;
+        const slots = prompt('시간표 (쉼표로 구분: 10:00, 11:20)', (data.slots || []).join(', '));
+        if (slots === null) return;
+
+        // 검증: 기존 이름은 허용, 다른 이름으로 변경 시 중복 금지
+        const existing = new Set(Object.keys(themeDB).filter(n => n !== oldName));
+        const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots }, { existingNames: existing });
+        if (!ok) { alert(errors.join('\n')); return; }
+
+        // 로컬 DB 반영 (rename 처리)
+        const renamed = normalized.name !== oldName;
+        if (renamed) {
+            // 제외 슬롯 상태 이관
+            if (excludedSlots[oldName]) {
+                excludedSlots[normalized.name] = excludedSlots[oldName];
+                delete excludedSlots[oldName];
+            }
+            delete themeDB[oldName];
+        }
+        themeDB[normalized.name] = { shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
+        renderThemeListFromDB();
+
+        // 시트 업데이트 (베스트 에포트)
+        try {
+            const payload = { action: 'update', oldName, name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        } catch(e) {
+            // 무시: 오프라인 등
+        }
+    }
+
+    async function deleteTheme(name) {
+        if (!themeDB[name]) return;
+        if (!confirm(`'${name}' 테마를 삭제하시겠습니까?`)) return;
+        delete themeDB[name];
+        if (excludedSlots[name]) delete excludedSlots[name];
+        renderThemeListFromDB();
+        try {
+            const payload = { action: 'delete', name };
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        } catch(e) {}
     }
 
     // --- 연방 알고리즘 로직 (이전과 동일) ---
@@ -171,8 +706,13 @@
             validResults.push({ schedule: [...currentSched], endTime: lastEnd });
             return;
         }
-        const data = themeDB[order[idx]];
-        data.slots.forEach(slot => {
+        const themeName = order[idx];
+        const data = themeDB[themeName];
+        if (!data) return;
+        const exSet = excludedSlots[themeName] || new Set();
+        const activeSlots = (data.slots || []).filter(s => !exSet.has(s));
+        if (activeSlots.length === 0) return; // 모든 슬롯 제외 시 스킵
+        activeSlots.forEach(slot => {
             const gap = (lastShop === data.shop) ? sameGap : diffGap;
             const startDt = new Date(`2026-01-01T${slot}`);
             const compareTime = lastEnd || document.getElementById('startTime').value;
@@ -181,7 +721,7 @@
             if (startDt >= prevEndPlusGap) {
                 const endDt = new Date(startDt.getTime() + data.duration * 60000);
                 const endTimeStr = endDt.toTimeString().slice(0, 5);
-                currentSched.push({ name: order[idx], shop: data.shop, start: slot, end: endTimeStr });
+                currentSched.push({ name: themeName, shop: data.shop, start: slot, end: endTimeStr });
                 findSchedule(idx + 1, currentSched, endTimeStr, data.shop, order, sameGap, diffGap, validResults);
                 currentSched.pop();
             }
@@ -208,6 +748,8 @@
     function getCombinations(arr, n) { if (n === 1) return arr.map(v => [v]); const res = []; arr.forEach((fixed, idx, origin) => { const rest = origin.slice(idx + 1); const combis = getCombinations(rest, n - 1); combis.forEach(c => res.push([fixed, ...c])); }); return res; }
     function getPermutations(arr) { if (arr.length === 1) return [arr]; const res = []; arr.forEach((fixed, idx, origin) => { const rest = [...origin.slice(0, idx), ...origin.slice(idx + 1)]; const perms = getPermutations(rest); perms.forEach(p => res.push([fixed, ...p])); }); return res; }
 
+    setupStartTimePersistence();
+    setupFiveMinuteEnforcement();
     loadThemes();
 </script>
 </body>
