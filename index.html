@@ -375,7 +375,7 @@
             btn.disabled = true;
             try {
                 const payload = { action: 'add', name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', '), dayType: normalized.dayType };
-                await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
                 alert('저장되었습니다!');
                 themeDB[key] = { name: normalized.name, dayType: normalized.dayType, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
                 renderThemeListFromDB();
@@ -414,7 +414,7 @@
             try {
                 const old = parseKey(currentEditOldKey);
                 const payload = { action: 'update', oldName: old.name, oldDayType: old.dayType, name: normalized.name, dayType: normalized.dayType, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
-                await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
             } catch (e) { /* ignore */ }
             currentEditOldKey = null;
             formMode = 'add';
@@ -544,7 +544,7 @@
 
     async function postToSheet(payload) {
         try {
-            await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
             return true;
         } catch(e) { return false; }
     }
@@ -697,7 +697,7 @@
         // 시트 업데이트 (베스트 에포트)
         try {
             const payload = { action: 'update', oldName, name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
-            await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
         } catch(e) {
             // 무시: 오프라인 등
         }
@@ -712,7 +712,7 @@
         renderThemeListFromDB();
         try {
             const payload = { action: 'delete', name: t.name, dayType: t.dayType };
-            await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
         } catch(e) {}
     }
 
