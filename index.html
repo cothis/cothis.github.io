@@ -50,6 +50,11 @@
         <input type="text" id="newName" placeholder="테마명 (예: CLAIM)">
         <label for="newShop">매장명</label>
         <input type="text" id="newShop" placeholder="매장명 (예: 키이스케이프 로그)">
+        <label for="newDayType">요일</label>
+        <select id="newDayType">
+            <option value="평일" selected>평일</option>
+            <option value="주말">주말</option>
+        </select>
         <label for="newDuration">소요시간(분)</label>
         <input type="number" id="newDuration" placeholder="소요시간 (분)">
         <label for="newSlotTime">시간표 추가</label>
@@ -119,6 +124,13 @@
         </div>
 
         <label>🧩 테마 선택 (중복 선택 가능)</label>
+        <div style="display:flex; gap:8px; align-items:center; margin:6px 0;">
+            <label for="listDayType" style="margin:0;">조회 요일</label>
+            <select id="listDayType" style="width:auto;">
+                <option value="평일" selected>평일</option>
+                <option value="주말">주말</option>
+            </select>
+        </div>
         <div id="consistencySummary" style="font-size:0.8rem; color:#64748b; margin:6px 0 6px 2px;"></div>
         <div id="themeSelector" class="theme-selector">
             <div class="loading-spinner">데이터 로딩 중...</div>
@@ -143,9 +155,9 @@
 
 <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbygHe6RRs463-QPaJXASFgG0Ex0FCxEj0pDJwNksd0ST9eNXhPpbvWqgO7yOyIjM6IFOA/exec";
-    let themeDB = {};
-    // 각 테마별 제외한 시간 저장 (세션 한정)
-    const excludedSlots = {}; // { [themeName]: Set<string> }
+    let themeDB = {}; // { [key]: { name, dayType, shop, duration, slots } }
+    // 각 테마별(이름+평일/주말) 제외한 시간 저장 (세션 한정)
+    const excludedSlots = {}; // { [key]: Set<string> }
 
     // 시작 가능 시간 퍼시스턴스 (localStorage)
     const START_TIME_KEY = 'epp.startTime';
@@ -182,6 +194,12 @@
     }
     function toMinutes(s) { const [h, m] = s.split(":" ).map(Number); return h*60 + m; }
     function fromMinutes(min) { const h = Math.floor(min/60).toString().padStart(2,'0'); const m = (min%60).toString().padStart(2,'0'); return `${h}:${m}`; }
+
+    // 일자 타입(평일/주말)
+    const DAY_TYPES = ['평일','주말'];
+    function normalizeDayType(v){ const s = String(v||'').trim(); return DAY_TYPES.includes(s) ? s : '평일'; }
+    function makeKey(name, dayType){ return `${name}::${normalizeDayType(dayType)}`; }
+    function parseKey(key){ const i = key.lastIndexOf('::'); if(i<0) return { name:key, dayType:'평일' }; return { name:key.slice(0,i), dayType:key.slice(i+2) }; }
 
     // 5분 단위 스냅/검증 유틸
     function isFiveMinuteTime(s){ if(!isValidTimeStr(s)) return false; const mm = parseInt(s.split(':')[1],10); return mm % 5 === 0; }
@@ -300,13 +318,14 @@
 
     // --- 통합 폼 모드 관리 (추가/수정 공유) ---
     let formMode = 'add'; // 'add' | 'edit'
-    let currentEditOldName = null;
+    let currentEditOldKey = null; // composite key name::dayType
     function resetFormFields(){
         ['newName','newShop','newDuration','newSlots','newSlotTime'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+        const dt = document.getElementById('newDayType'); if (dt) dt.value = '평일';
         const badgeWrap = document.getElementById('newSlotBadges');
         if (badgeWrap) badgeWrap.innerHTML = '';
     }
-    function setFormMode(mode, name){
+    function setFormMode(mode, key){
         formMode = mode;
         const title = document.getElementById('formTitle');
         const saveBtn = document.getElementById('formSaveBtn');
@@ -314,21 +333,22 @@
         const toggleBtn = document.getElementById('toggleAddBtn');
         const sec = document.getElementById('addSection');
         if (mode === 'add') {
-            currentEditOldName = null;
+            currentEditOldKey = null;
             if (title) title.textContent = '➕ 새 테마 등록';
             if (saveBtn) saveBtn.textContent = '시트에 저장 및 새로고침';
             if (delBtn) delBtn.style.display = 'none';
             resetFormFields();
             renderSlotBadges('new');
         } else if (mode === 'edit') {
-            const data = themeDB[name];
+            const data = themeDB[key];
             if (!data) { alert('해당 테마를 찾을 수 없습니다.'); return; }
-            currentEditOldName = name;
+            currentEditOldKey = key;
             if (title) title.textContent = '✏️ 테마 수정';
             if (saveBtn) saveBtn.textContent = '수정 저장';
             if (delBtn) delBtn.style.display = 'block';
-            document.getElementById('newName').value = name;
+            document.getElementById('newName').value = data.name;
             document.getElementById('newShop').value = data.shop ?? '';
+            document.getElementById('newDayType').value = data.dayType ?? '평일';
             document.getElementById('newDuration').value = data.duration ?? '';
             document.getElementById('newSlots').value = (data.slots || []).join(' ');
             renderSlotBadges('new');
@@ -341,21 +361,23 @@
     async function saveThemeFromForm(){
         const name = document.getElementById('newName').value;
         const shop = document.getElementById('newShop').value;
+        const dayType = document.getElementById('newDayType').value;
         const duration = document.getElementById('newDuration').value;
         const slots = document.getElementById('newSlots').value;
 
         if (formMode === 'add') {
-            const existingNames = new Set(Object.keys(themeDB));
-            const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots }, { existingNames });
+            const existingKeys = new Set(Object.keys(themeDB));
+            const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots, dayType }, { existingKeys });
             if (!ok) { alert(errors.join('\n')); return; }
+            const key = makeKey(normalized.name, normalized.dayType);
             const btn = document.getElementById('formSaveBtn');
             btn.textContent = '저장 중...';
             btn.disabled = true;
             try {
-                const payload = { action: 'add', name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
-                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                const payload = { action: 'add', name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', '), dayType: normalized.dayType };
+                await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 alert('저장되었습니다!');
-                themeDB[normalized.name] = { shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
+                themeDB[key] = { name: normalized.name, dayType: normalized.dayType, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
                 renderThemeListFromDB();
                 resetFormFields();
                 // 폼 닫기
@@ -369,19 +391,20 @@
                 btn.disabled = false;
             }
         } else {
-            if (!currentEditOldName) { alert('수정할 테마가 선택되지 않았습니다.'); return; }
-            const existing = new Set(Object.keys(themeDB).filter(n => n !== currentEditOldName));
-            const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots }, { existingNames: existing });
+            if (!currentEditOldKey) { alert('수정할 테마가 선택되지 않았습니다.'); return; }
+            const existing = new Set(Object.keys(themeDB).filter(n => n !== currentEditOldKey));
+            const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots, dayType }, { existingKeys: existing });
             if (!ok) { alert(errors.join('\n')); return; }
-            const renamed = normalized.name !== currentEditOldName;
+            const newKey = makeKey(normalized.name, normalized.dayType);
+            const renamed = newKey !== currentEditOldKey;
             if (renamed) {
-                if (excludedSlots[currentEditOldName]) {
-                    excludedSlots[normalized.name] = excludedSlots[currentEditOldName];
-                    delete excludedSlots[currentEditOldName];
+                if (excludedSlots[currentEditOldKey]) {
+                    excludedSlots[newKey] = excludedSlots[currentEditOldKey];
+                    delete excludedSlots[currentEditOldKey];
                 }
-                delete themeDB[currentEditOldName];
+                delete themeDB[currentEditOldKey];
             }
-            themeDB[normalized.name] = { shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
+            themeDB[newKey] = { name: normalized.name, dayType: normalized.dayType, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
             renderThemeListFromDB();
             // 닫기
             const sec = document.getElementById('addSection');
@@ -389,31 +412,32 @@
             if (sec && tbtn) { sec.style.display = 'none'; tbtn.innerText = '테마 등록'; }
             // 시트 업데이트
             try {
-                const payload = { action: 'update', oldName: currentEditOldName, name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
-                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                const old = parseKey(currentEditOldKey);
+                const payload = { action: 'update', oldName: old.name, oldDayType: old.dayType, name: normalized.name, dayType: normalized.dayType, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
+                await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             } catch (e) { /* ignore */ }
-            currentEditOldName = null;
+            currentEditOldKey = null;
             formMode = 'add';
         }
     }
 
     function deleteFromForm(){
-        if (!currentEditOldName) { alert('삭제할 테마가 선택되지 않았습니다.'); return; }
-        const target = currentEditOldName;
+        if (!currentEditOldKey) { alert('삭제할 테마가 선택되지 않았습니다.'); return; }
+        const target = currentEditOldKey;
         // 닫기 먼저
         const sec = document.getElementById('addSection');
         const tbtn = document.getElementById('toggleAddBtn');
         if (sec && tbtn) { sec.style.display = 'none'; tbtn.innerText = '테마 등록'; }
-        currentEditOldName = null;
+        currentEditOldKey = null;
         formMode = 'add';
         deleteTheme(target);
     }
 
-    function viewSlots(name) {
-        const t = themeDB[name];
+    function viewSlots(key) {
+        const t = themeDB[key];
         if (!t) return alert('해당 테마를 찾을 수 없습니다.');
         const list = (t.slots || []).join(', ');
-        alert(`${name} (${t.shop}, ${t.duration}분)\n시간표: ${list || '없음'}`);
+        alert(`${t.name}·${t.dayType} (${t.shop}, ${t.duration}분)\n시간표: ${list || '없음'}`);
     }
     function normalizeSlots(slotsStr) {
         const raw = String(slotsStr || '').trim();
@@ -438,9 +462,10 @@
         unique.sort((a,b) => toMinutes(a)-toMinutes(b));
         return unique;
     }
-    function validateTheme({name, shop, duration, slots}, options = {}) {
+    function validateTheme({name, shop, duration, slots, dayType}, options = {}) {
         const errors = [];
         const out = { name: String(name||'').trim(), shop: String(shop||'').trim() };
+        out.dayType = normalizeDayType(dayType);
         const d = parseInt(duration, 10);
         if (!out.name) errors.push('테마명이 비어있습니다.');
         if (!out.shop) errors.push('매장명이 비어있습니다.');
@@ -449,22 +474,27 @@
         const normSlots = Array.isArray(slots) ? slots : normalizeSlots(slots);
         if (normSlots.length === 0) errors.push('올바른 시간표(HH:MM)가 1개 이상 필요합니다.');
         out.slots = normSlots;
-        if (options && options.existingNames) {
-            const exists = options.existingNames.has(out.name);
-            if (exists && !options.allowExistingName) errors.push('이미 존재하는 테마명입니다.');
+        // 중복 체크는 이름+요일 조합으로 수행
+        const key = makeKey(out.name, out.dayType);
+        if (options && options.existingKeys) {
+            const exists = options.existingKeys.has(key);
+            if (exists && !options.allowExistingName) errors.push('이미 같은 이름/요일 조합이 존재합니다.');
         }
         return { ok: errors.length === 0, errors, normalized: out };
     }
 
     function renderThemeListFromDB() {
         const selector = document.getElementById('themeSelector');
+        const listDayTypeEl = document.getElementById('listDayType');
+        const selectedDayType = normalizeDayType(listDayTypeEl ? listDayTypeEl.value : '평일');
         // 현재 선택 상태 유지
         const prevSelected = new Set(Array.from(selector.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value));
         selector.innerHTML = '';
-        const entries = Object.entries(themeDB).sort((a,b)=>a[0].localeCompare(b[0]));
+        const allEntries = Object.entries(themeDB).sort((a,b)=>a[0].localeCompare(b[0]));
+        const entries = allEntries.filter(([key, data]) => normalizeDayType(data.dayType) === selectedDayType);
         let invalidCount = 0;
-        entries.forEach(([name, data]) => {
-            const { ok, errors } = validateTheme({ name, shop: data.shop, duration: data.duration, slots: data.slots }, { allowExistingName: true });
+        entries.forEach(([key, data]) => {
+            const { ok, errors } = validateTheme({ name: data.name, shop: data.shop, duration: data.duration, slots: data.slots, dayType: data.dayType }, { allowExistingName: true });
             if (!ok) invalidCount++;
 
             const row = document.createElement('div');
@@ -473,9 +503,9 @@
             // 체크박스
             const cb = document.createElement('input');
             cb.type = 'checkbox';
-            cb.value = name;
+            cb.value = key;
             cb.disabled = !ok;
-            if (prevSelected.has(name) && ok) cb.checked = true;
+            if (prevSelected.has(key) && ok) cb.checked = true;
             row.appendChild(cb);
 
             // 메타 + 배지
@@ -483,20 +513,20 @@
             meta.className = 'theme-meta';
             const title = document.createElement('div');
             const warn = ok ? '' : `(비정상: ${errors[0]})`;
-            title.innerHTML = `${name} <small style="color:#94a3b8">(${data.shop}, ${data.duration}분)</small> ${ok ? '' : `<small style='color:#ef4444'>${warn}</small>`}`;
+            title.innerHTML = `${data.name} <small style="color:#94a3b8">(${data.shop}, ${data.duration}분)</small> <span class="badge">${data.dayType}</span> ${ok ? '' : `<small style='color:#ef4444'>${warn}</small>`}`;
             meta.appendChild(title);
 
             // 슬롯 배지 영역
             const badges = document.createElement('div');
             badges.className = 'slot-badges';
-            const exSet = excludedSlots[name] || new Set();
+            const exSet = excludedSlots[key] || new Set();
             (data.slots || []).forEach(slot => {
                 const span = document.createElement('span');
                 const isOff = exSet.has(slot);
                 span.className = `slot-badge ${isOff ? 'off' : 'on'}`;
                 span.title = isOff ? '클릭하여 포함' : '클릭하여 제외';
                 span.textContent = `${slot}`;
-                span.onclick = () => toggleSlot(name, slot);
+                span.onclick = () => toggleSlot(key, slot);
                 badges.appendChild(span);
             });
             meta.appendChild(badges);
@@ -506,7 +536,7 @@
         });
         const sum = document.getElementById('consistencySummary');
         const total = entries.length;
-        sum.textContent = total ? `총 ${total}개, 비정상 ${invalidCount}개 (비정상 항목은 선택 불가)` : '';
+        sum.textContent = total ? `${selectedDayType} 기준 총 ${total}개, 비정상 ${invalidCount}개 (비정상 항목은 선택 불가)` : '';
 
         // 관리바도 함께 갱신
         renderManagementBar();
@@ -514,7 +544,7 @@
 
     async function postToSheet(payload) {
         try {
-            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+            await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             return true;
         } catch(e) { return false; }
     }
@@ -525,13 +555,14 @@
         if (!sel) return;
         const prev = sel.value;
         sel.innerHTML = '';
-        const names = Object.keys(themeDB).sort((a,b)=>a.localeCompare(b));
-        names.forEach(n => {
+        const keys = Object.keys(themeDB).sort((a,b)=>a.localeCompare(b));
+        keys.forEach(k => {
+            const t = themeDB[k];
             const opt = document.createElement('option');
-            opt.value = n; opt.textContent = `${n} (${themeDB[n].shop})`;
+            opt.value = k; opt.textContent = `${t.name} · ${t.dayType} (${t.shop})`;
             sel.appendChild(opt);
         });
-        if (prev && names.includes(prev)) sel.value = prev;
+        if (prev && keys.includes(prev)) sel.value = prev;
     }
     function manageEdit() {
         const sel = document.getElementById('manageThemeSelect');
@@ -562,9 +593,9 @@
     }
 
     // 슬롯 토글
-    function toggleSlot(name, slot) {
-        if (!excludedSlots[name]) excludedSlots[name] = new Set();
-        const set = excludedSlots[name];
+    function toggleSlot(key, slot) {
+        if (!excludedSlots[key]) excludedSlots[key] = new Set();
+        const set = excludedSlots[key];
         if (set.has(slot)) set.delete(slot); else set.add(slot);
         renderThemeListFromDB();
     }
@@ -581,7 +612,10 @@
             data.forEach(item => {
                 const slots = normalizeSlots(item.slots);
                 const duration = parseInt(item.duration, 10);
-                themeDB[item.name] = { shop: item.shop, duration, slots };
+                const dayType = normalizeDayType(item.dayType);
+                const name = item.name;
+                const key = makeKey(name, dayType);
+                themeDB[key] = { name, dayType, shop: item.shop, duration, slots };
             });
             renderThemeListFromDB();
         } catch(e) {
@@ -663,36 +697,37 @@
         // 시트 업데이트 (베스트 에포트)
         try {
             const payload = { action: 'update', oldName, name: normalized.name, shop: normalized.shop, duration: normalized.duration, slots: normalized.slots.join(', ') };
-            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+            await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         } catch(e) {
             // 무시: 오프라인 등
         }
     }
 
-    async function deleteTheme(name) {
-        if (!themeDB[name]) return;
-        if (!confirm(`'${name}' 테마를 삭제하시겠습니까?`)) return;
-        delete themeDB[name];
-        if (excludedSlots[name]) delete excludedSlots[name];
+    async function deleteTheme(key) {
+        const t = themeDB[key];
+        if (!t) return;
+        if (!confirm(`'${t.name}' (${t.dayType}) 테마를 삭제하시겠습니까?`)) return;
+        delete themeDB[key];
+        if (excludedSlots[key]) delete excludedSlots[key];
         renderThemeListFromDB();
         try {
-            const payload = { action: 'delete', name };
-            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+            const payload = { action: 'delete', name: t.name, dayType: t.dayType };
+            await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         } catch(e) {}
     }
 
     // --- 연방 알고리즘 로직 (이전과 동일) ---
     function runCalculation() {
-        const selectedNames = Array.from(document.querySelectorAll('#themeSelector input:checked')).map(el => el.value);
+        const selectedKeys = Array.from(document.querySelectorAll('#themeSelector input:checked')).map(el => el.value);
         const targetCount = parseInt(document.getElementById('targetCount').value);
         const startTimeLimit = document.getElementById('startTime').value;
         const sameGap = parseInt(document.getElementById('sameGap').value);
         const diffGap = parseInt(document.getElementById('diffGap').value);
 
-        if (selectedNames.length < targetCount) return alert(`최소 ${targetCount}개를 선택하세요.`);
+        if (selectedKeys.length < targetCount) return alert(`최소 ${targetCount}개를 선택하세요.`);
 
         let validResults = [];
-        const combis = getCombinations(selectedNames, targetCount);
+        const combis = getCombinations(selectedKeys, targetCount);
         combis.forEach(set => {
             getPermutations(set).forEach(order => {
                 findSchedule(0, [], startTimeLimit, null, order, sameGap, diffGap, validResults);
@@ -706,10 +741,10 @@
             validResults.push({ schedule: [...currentSched], endTime: lastEnd });
             return;
         }
-        const themeName = order[idx];
-        const data = themeDB[themeName];
+        const key = order[idx];
+        const data = themeDB[key];
         if (!data) return;
-        const exSet = excludedSlots[themeName] || new Set();
+        const exSet = excludedSlots[key] || new Set();
         const activeSlots = (data.slots || []).filter(s => !exSet.has(s));
         if (activeSlots.length === 0) return; // 모든 슬롯 제외 시 스킵
         activeSlots.forEach(slot => {
@@ -721,7 +756,7 @@
             if (startDt >= prevEndPlusGap) {
                 const endDt = new Date(startDt.getTime() + data.duration * 60000);
                 const endTimeStr = endDt.toTimeString().slice(0, 5);
-                currentSched.push({ name: themeName, shop: data.shop, start: slot, end: endTimeStr });
+                currentSched.push({ key, name: data.name, dayType: data.dayType, shop: data.shop, start: slot, end: endTimeStr });
                 findSchedule(idx + 1, currentSched, endTimeStr, data.shop, order, sameGap, diffGap, validResults);
                 currentSched.pop();
             }
@@ -731,13 +766,13 @@
     function renderResults(results) {
         results.sort((a, b) => a.endTime.localeCompare(b.endTime));
         const container = document.getElementById('resultContainer');
-        container.innerHTML = `<h3 style="margin-left:5px;">검색 결과 ${results.length}건</h3>`;
+        container.innerHTML = `<h3 style=\"margin-left:5px;\">검색 결과 ${results.length}건</h3>`;
         results.slice(0, 10).forEach((res, i) => {
             const card = document.createElement('div');
             card.className = 'result-item';
             let html = `<strong>추천 ${i+1} <small>(종료 ${res.endTime})</small></strong><hr>`;
             res.schedule.forEach(s => {
-                html += `<div class="schedule-row"><span class="time">${s.start}~${s.end}</span> <b>${s.name}</b> <span class="badge">${s.shop}</span></div>`;
+                html += `<div class=\"schedule-row\"><span class=\"time\">${s.start}~${s.end}</span> <b>${s.name}</b> <span class=\"badge\">${s.shop}</span> <span class=\"badge\">${s.dayType}</span></div>`;
             });
             card.innerHTML = html;
             container.appendChild(card);
@@ -750,6 +785,7 @@
 
     setupStartTimePersistence();
     setupFiveMinuteEnforcement();
+    document.getElementById('listDayType')?.addEventListener('change', renderThemeListFromDB);
     loadThemes();
 </script>
 </body>
