@@ -35,6 +35,12 @@
 
         hr { border: 0; border-top: 1px solid #f1f5f9; margin: 15px 0; }
         .loading-spinner { text-align: center; color: #94a3b8; font-size: 0.9rem; padding: 10px; }
+
+        .fixed-order-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 6px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.88rem; }
+        .fixed-order-row .order-label { flex: 1; min-width: 0; word-break: break-word; }
+        .fixed-order-row button { padding: 6px 10px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; }
+        .fixed-order-row button:active { opacity: 0.85; }
+        .fixed-order-help { font-size: 0.78rem; color: #64748b; margin: 6px 0 10px 2px; line-height: 1.35; }
     </style>
 </head>
 <body>
@@ -136,6 +142,15 @@
             <div class="loading-spinner">데이터 로딩 중...</div>
         </div>
 
+        <label style="display:flex; align-items:center; gap:10px; margin-top:8px; font-size:0.9rem; font-weight:600; color:#475569; cursor:pointer;">
+            <input type="checkbox" id="useFixedOrder" style="width:auto; margin:0;">
+            지정 순서로만 계산
+        </label>
+        <div id="themeOrderPanelWrap" style="display:none;">
+            <p id="themeOrderHelp" class="fixed-order-help">체크한 테마를 아래 순서대로 방문합니다. ↑↓로 순서를 바꿀 수 있습니다. 목표 개수가 N이면 위에서부터 N개만 사용합니다.</p>
+            <div id="themeOrderPanel"></div>
+        </div>
+
         <div style="display:flex; gap:10px;">
             <div style="flex:1;">
                 <label>동일매장 간격</label>
@@ -144,6 +159,21 @@
             <div style="flex:1;">
                 <label>타매장 간격</label>
                 <input type="number" id="diffGap" value="25">
+            </div>
+        </div>
+
+        <label style="display:flex; align-items:center; gap:10px; margin-top:4px; font-size:0.9rem; font-weight:600; color:#475569; cursor:pointer;">
+            <input type="checkbox" id="mealEnabled" style="width:auto; margin:0;">
+            밥시간 반영 (아래 구간에는 테마가 겹치지 않게 계산)
+        </label>
+        <div id="mealRangeRow" style="display:flex; gap:10px; opacity:0.5; pointer-events:none;">
+            <div style="flex:1;">
+                <label for="mealStart">밥시간 시작</label>
+                <input type="time" id="mealStart" value="18:00" step="300">
+            </div>
+            <div style="flex:1;">
+                <label for="mealEnd">밥시간 종료</label>
+                <input type="time" id="mealEnd" value="19:00" step="300">
             </div>
         </div>
 
@@ -158,6 +188,8 @@
     let themeDB = {}; // { [key]: { name, dayType, shop, duration, slots } }
     // 각 테마별(이름+평일/주말) 제외한 시간 저장 (세션 한정)
     const excludedSlots = {}; // { [key]: Set<string> }
+    /** 지정 순서 모드용: 사용자가 체크한 테마 키의 선호 방문 순서 */
+    let themeOrderPreference = [];
 
     // 시작 가능 시간 퍼시스턴스 (localStorage)
     const START_TIME_KEY = 'epp.startTime';
@@ -177,6 +209,56 @@
             if (el) el.value = saved;
         } catch (e) { /* ignore */ }
     }
+    const MEAL_ENABLED_KEY = 'epp.mealEnabled';
+    const MEAL_START_KEY = 'epp.mealStart';
+    const MEAL_END_KEY = 'epp.mealEnd';
+
+    function saveMealSettings() {
+        try {
+            const en = document.getElementById('mealEnabled');
+            const ms = document.getElementById('mealStart');
+            const me = document.getElementById('mealEnd');
+            if (en) localStorage.setItem(MEAL_ENABLED_KEY, en.checked ? '1' : '0');
+            if (ms && ms.value && isValidTimeStr(ms.value)) localStorage.setItem(MEAL_START_KEY, ms.value);
+            if (me && me.value && isValidTimeStr(me.value)) localStorage.setItem(MEAL_END_KEY, me.value);
+        } catch (e) { /* ignore */ }
+    }
+    function restoreMealSettings() {
+        try {
+            const en = document.getElementById('mealEnabled');
+            const ms = document.getElementById('mealStart');
+            const me = document.getElementById('mealEnd');
+            const savedEn = localStorage.getItem(MEAL_ENABLED_KEY);
+            const savedS = localStorage.getItem(MEAL_START_KEY);
+            const savedE = localStorage.getItem(MEAL_END_KEY);
+            if (en && savedEn !== null) en.checked = savedEn === '1';
+            if (ms && savedS && isValidTimeStr(savedS)) ms.value = savedS;
+            if (me && savedE && isValidTimeStr(savedE)) me.value = savedE;
+        } catch (e) { /* ignore */ }
+        syncMealRowUi();
+    }
+    function syncMealRowUi() {
+        const en = document.getElementById('mealEnabled');
+        const row = document.getElementById('mealRangeRow');
+        if (!en || !row) return;
+        const on = en.checked;
+        row.style.opacity = on ? '1' : '0.5';
+        row.style.pointerEvents = on ? 'auto' : 'none';
+    }
+    function setupMealUi() {
+        restoreMealSettings();
+        const en = document.getElementById('mealEnabled');
+        if (en) en.addEventListener('change', () => { syncMealRowUi(); saveMealSettings(); });
+        ['mealStart', 'mealEnd'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', saveMealSettings);
+                el.addEventListener('input', saveMealSettings);
+            }
+        });
+        syncMealRowUi();
+    }
+
     function setupStartTimePersistence() {
         restoreStartTime();
         const el = document.getElementById('startTime');
@@ -194,6 +276,59 @@
     }
     function toMinutes(s) { const [h, m] = s.split(":" ).map(Number); return h*60 + m; }
     function fromMinutes(min) { const h = Math.floor(min/60).toString().padStart(2,'0'); const m = (min%60).toString().padStart(2,'0'); return `${h}:${m}`; }
+
+    /** 한 구간의 시작~종료 시각을 같은 기준일(로컬)로 해석해, 자정 넘김 시 종료를 익일로 보정한 뒤 epoch ms 반환 */
+    function segmentEndInstantMs(startStr, endStr) {
+        if (!isValidTimeStr(startStr) || !isValidTimeStr(endStr)) return 0;
+        const base = new Date(2026, 0, 1);
+        const s = new Date(base);
+        const [sh, sm] = startStr.split(':').map(Number);
+        s.setHours(sh, sm, 0, 0);
+        const e = new Date(base);
+        const [eh, em] = endStr.split(':').map(Number);
+        e.setHours(eh, em, 0, 0);
+        if (e.getTime() <= s.getTime()) e.setDate(e.getDate() + 1);
+        return e.getTime();
+    }
+    /** 일정 전체의 '진짜' 종료 시각(ms) — 마지막 구간 기준 (자정 넘김 반영) */
+    function scheduleEndInstantMs(schedule) {
+        if (!schedule || schedule.length === 0) return 0;
+        const last = schedule[schedule.length - 1];
+        return segmentEndInstantMs(last.start, last.end);
+    }
+
+    /** 구간 [startStr, endStr]의 절대 시작·종료 ms (자정 넘김 시 종료일 익일 보정) */
+    function segmentInstantRangeMs(startStr, endStr) {
+        if (!isValidTimeStr(startStr) || !isValidTimeStr(endStr)) return null;
+        const base = new Date(2026, 0, 1);
+        const s = new Date(base);
+        const [sh, sm] = startStr.split(':').map(Number);
+        s.setHours(sh, sm, 0, 0);
+        const e = new Date(base);
+        const [eh, em] = endStr.split(':').map(Number);
+        e.setHours(eh, em, 0, 0);
+        if (e.getTime() <= s.getTime()) e.setDate(e.getDate() + 1);
+        return { startMs: s.getTime(), endMs: e.getTime() };
+    }
+
+    /** 밥(휴식) 구간 — 종료가 시작보다 작으면 익일로 해석 */
+    function mealInstantRangeMs(mealStartStr, mealEndStr) {
+        const r = segmentInstantRangeMs(mealStartStr, mealEndStr);
+        if (!r) return null;
+        if (r.endMs <= r.startMs) return null;
+        return r;
+    }
+
+    function rangesOverlapOpen(a0, a1, b0, b1) {
+        return Math.max(a0, b0) < Math.min(a1, b1);
+    }
+
+    function segmentOverlapsMeal(segmentStartStr, segmentEndStr, mealRange) {
+        if (!mealRange) return false;
+        const seg = segmentInstantRangeMs(segmentStartStr, segmentEndStr);
+        if (!seg) return false;
+        return rangesOverlapOpen(seg.startMs, seg.endMs, mealRange.startMs, mealRange.endMs);
+    }
 
     // 일자 타입(평일/주말)
     const DAY_TYPES = ['평일','주말'];
@@ -235,6 +370,8 @@
         enforceFiveMinuteStepOn(document.getElementById('startTime'));
         enforceFiveMinuteStepOn(document.getElementById('newSlotTime'));
         enforceFiveMinuteStepOn(document.getElementById('editSlotTime'));
+        enforceFiveMinuteStepOn(document.getElementById('mealStart'));
+        enforceFiveMinuteStepOn(document.getElementById('mealEnd'));
     }
 
     function toggleAddSection() {
@@ -534,12 +671,96 @@
             row.appendChild(meta);
             selector.appendChild(row);
         });
+        // 체크 상태와 선호 순서 동기화(새로고침 직후에도 순서 목록이 비지 않도록)
+        const checkedNow = Array.from(selector.querySelectorAll('input[type=checkbox]:checked')).map(el => el.value);
+        themeOrderPreference = themeOrderPreference.filter(k => checkedNow.includes(k) && themeDB[k]);
+        checkedNow.forEach(k => { if (!themeOrderPreference.includes(k)) themeOrderPreference.push(k); });
+
         const sum = document.getElementById('consistencySummary');
         const total = entries.length;
         sum.textContent = total ? `${selectedDayType} 기준 총 ${total}개, 비정상 ${invalidCount}개 (비정상 항목은 선택 불가)` : '';
 
+        if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
+
         // 관리바도 함께 갱신
         renderManagementBar();
+    }
+
+    function renderThemeOrderPanel() {
+        const wrap = document.getElementById('themeOrderPanelWrap');
+        const panel = document.getElementById('themeOrderPanel');
+        if (!wrap || !panel) return;
+        const useFixed = document.getElementById('useFixedOrder')?.checked;
+        wrap.style.display = useFixed ? 'block' : 'none';
+        if (!useFixed) { panel.innerHTML = ''; return; }
+
+        const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input:checked')).map(el => el.value));
+        let ordered = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
+        const tail = [...checked].filter(k => !ordered.includes(k)).sort((a, b) => a.localeCompare(b));
+        ordered = [...ordered, ...tail];
+        themeOrderPreference = [...ordered, ...themeOrderPreference.filter(k => !ordered.includes(k))];
+
+        if (ordered.length === 0) {
+            panel.innerHTML = '<p style="font-size:0.85rem; color:#94a3b8; margin:0;">테마를 체크하면 순서 목록이 표시됩니다.</p>';
+            return;
+        }
+        panel.innerHTML = '';
+        ordered.forEach((key, idx) => {
+            const data = themeDB[key];
+            if (!data) return;
+            const row = document.createElement('div');
+            row.className = 'fixed-order-row';
+            row.innerHTML = `
+                <span style="font-weight:700; color:#64748b; min-width:1.2rem;">${idx + 1}</span>
+                <span class="order-label"><strong>${escapeHtml(data.name)}</strong> <small style="color:#94a3b8;">(${escapeHtml(data.shop)})</small></span>
+                <button type="button" aria-label="위로">↑</button>
+                <button type="button" aria-label="아래로">↓</button>
+            `;
+            const [btnUp, btnDown] = row.querySelectorAll('button');
+            btnUp.onclick = () => moveThemeOrder(key, -1);
+            btnDown.onclick = () => moveThemeOrder(key, 1);
+            panel.appendChild(row);
+        });
+    }
+
+    function escapeHtml(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function moveThemeOrder(key, delta) {
+        const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input:checked')).map(el => el.value));
+        let ordered = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
+        const tail = [...checked].filter(k => !ordered.includes(k)).sort((a, b) => a.localeCompare(b));
+        ordered = [...ordered, ...tail];
+        const i = ordered.indexOf(key);
+        if (i < 0) return;
+        const j = i + delta;
+        if (j < 0 || j >= ordered.length) return;
+        const t = ordered[i]; ordered[i] = ordered[j]; ordered[j] = t;
+        themeOrderPreference = [...ordered, ...themeOrderPreference.filter(k => !ordered.includes(k))];
+        renderThemeOrderPanel();
+    }
+
+    function onThemeSelectorChange(e) {
+        if (!e.target || e.target.type !== 'checkbox') return;
+        const key = e.target.value;
+        if (e.target.checked) {
+            if (!themeOrderPreference.includes(key)) themeOrderPreference.push(key);
+        } else {
+            themeOrderPreference = themeOrderPreference.filter(k => k !== key);
+        }
+        if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
+    }
+
+    function setupFixedOrderUi() {
+        document.getElementById('useFixedOrder')?.addEventListener('change', () => {
+            renderThemeOrderPanel();
+        });
+        document.getElementById('themeSelector')?.addEventListener('change', onThemeSelectorChange);
     }
 
     async function postToSheet(payload) {
@@ -726,17 +947,44 @@
 
         if (selectedKeys.length < targetCount) return alert(`최소 ${targetCount}개를 선택하세요.`);
 
+        const mealEnabled = document.getElementById('mealEnabled')?.checked;
+        const mealStartVal = document.getElementById('mealStart')?.value;
+        const mealEndVal = document.getElementById('mealEnd')?.value;
+        let mealRange = null;
+        if (mealEnabled) {
+            if (!isValidTimeStr(mealStartVal) || !isValidTimeStr(mealEndVal)) {
+                return alert('밥시간을 켠 경우 시작·종료 시간을 모두 입력하세요.');
+            }
+            mealRange = mealInstantRangeMs(mealStartVal, mealEndVal);
+            if (!mealRange) return alert('밥시간 종료는 시작보다 늦어야 합니다.');
+        }
+
+        const useFixedOrder = document.getElementById('useFixedOrder')?.checked;
         let validResults = [];
-        const combis = getCombinations(selectedKeys, targetCount);
-        combis.forEach(set => {
-            getPermutations(set).forEach(order => {
-                findSchedule(0, [], startTimeLimit, null, order, sameGap, diffGap, validResults);
+
+        if (useFixedOrder) {
+            const checked = new Set(selectedKeys);
+            let order = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
+            const missing = selectedKeys.filter(k => !order.includes(k)).sort((a, b) => a.localeCompare(b));
+            order = [...order, ...missing];
+            if (order.length < targetCount) {
+                alert(`지정 순서 모드: 체크한 테마가 목표 개수(${targetCount})보다 적습니다. 테마를 더 선택하거나 목표 개수를 줄이세요.`);
+                return;
+            }
+            order = order.slice(0, targetCount);
+            findSchedule(0, [], startTimeLimit, null, order, sameGap, diffGap, validResults, mealRange);
+        } else {
+            const combis = getCombinations(selectedKeys, targetCount);
+            combis.forEach(set => {
+                getPermutations(set).forEach(order => {
+                    findSchedule(0, [], startTimeLimit, null, order, sameGap, diffGap, validResults, mealRange);
+                });
             });
-        });
+        }
         renderResults(validResults);
     }
 
-    function findSchedule(idx, currentSched, lastEnd, lastShop, order, sameGap, diffGap, validResults) {
+    function findSchedule(idx, currentSched, lastEnd, lastShop, order, sameGap, diffGap, validResults, mealRange) {
         if (idx === order.length) {
             validResults.push({ schedule: [...currentSched], endTime: lastEnd });
             return;
@@ -756,15 +1004,17 @@
             if (startDt >= prevEndPlusGap) {
                 const endDt = new Date(startDt.getTime() + data.duration * 60000);
                 const endTimeStr = endDt.toTimeString().slice(0, 5);
+                if (mealRange && segmentOverlapsMeal(slot, endTimeStr, mealRange)) return;
                 currentSched.push({ key, name: data.name, dayType: data.dayType, shop: data.shop, start: slot, end: endTimeStr });
-                findSchedule(idx + 1, currentSched, endTimeStr, data.shop, order, sameGap, diffGap, validResults);
+                findSchedule(idx + 1, currentSched, endTimeStr, data.shop, order, sameGap, diffGap, validResults, mealRange);
                 currentSched.pop();
             }
         });
     }
 
     function renderResults(results) {
-        results.sort((a, b) => a.endTime.localeCompare(b.endTime));
+        // 문자열 비교하면 00:15가 21:30보다 "앞"으로 가서, 자정 넘긴 일정이 잘못 1순위가 됨 → 실제 종료 시각(ms)으로 정렬
+        results.sort((a, b) => scheduleEndInstantMs(a.schedule) - scheduleEndInstantMs(b.schedule));
         const container = document.getElementById('resultContainer');
         container.innerHTML = `<h3 style=\"margin-left:5px;\">검색 결과 ${results.length}건</h3>`;
         results.slice(0, 10).forEach((res, i) => {
@@ -785,6 +1035,8 @@
 
     setupStartTimePersistence();
     setupFiveMinuteEnforcement();
+    setupMealUi();
+    setupFixedOrderUi();
     document.getElementById('listDayType')?.addEventListener('change', renderThemeListFromDB);
     loadThemes();
 </script>
