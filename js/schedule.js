@@ -252,7 +252,7 @@ function renderResults(results, mealRenderOpts) {
                 html += `<div class="schedule-row schedule-meal"><span class="time">${row.start}~${row.end}</span> <b>휴식·밥</b> ${winBadge}</div>`;
             } else {
                 const s = row;
-                html += `<div class="schedule-row"><span class="time">${s.start}~${s.end}</span> <b>${s.name}</b> <span class="badge">${s.shop}</span> <span class="badge">${s.dayType}</span></div>`;
+                html += `<div class="schedule-row"><span class="time">${s.start}~${s.end}</span> <b>${s.name}</b> <span class="badge">${s.shop}</span></div>`;
             }
         });
         card.innerHTML = html;
