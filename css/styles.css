@@ -1,5 +1,9 @@
 *, *::before, *::after { box-sizing: border-box; }
-:root { --primary: #4f46e5; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --accent: #6366f1; }
+:root { --primary: #4f46e5; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --accent: #6366f1; --theme-list-max: min(58vh, 460px); }
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
 body { font-family: 'Pretendard', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
 .container { width: 100%; max-width: 500px; }
 .card { background: var(--card); border-radius: 16px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -21,6 +25,21 @@ input.input-hhmm::placeholder {
 .slot-time-row input.input-hhmm {
     flex: 1;
     min-width: 0;
+}
+
+.schedule-settings-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    margin-bottom: 12px;
+}
+.schedule-settings-row > .schedule-settings-col {
+    flex: 1;
+    min-width: 0;
+}
+.schedule-settings-row input,
+.schedule-settings-row select {
+    margin-bottom: 0;
 }
 
 .meal-fields-row {
@@ -63,10 +82,17 @@ input.input-hhmm::placeholder {
 @media (max-width: 480px) {
     .meal-fields-row {
         grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .meal-fields-row > .meal-field-col {
+        gap: 4px;
+    }
+    .meal-fields-row .meal-field-label {
+        min-height: 0;
     }
 }
 
-.theme-selector { display: grid; grid-template-columns: 1fr; gap: 8px; max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+.theme-selector { display: grid; grid-template-columns: 1fr; gap: 8px; max-height: var(--theme-list-max); overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
 .theme-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
 .theme-item input[type="checkbox"] { width: auto; margin-top: 4px; }
 .theme-meta { display: flex; flex-direction: column; gap: 6px; flex: 1; }
@@ -94,3 +120,22 @@ hr { border: 0; border-top: 1px solid #f1f5f9; margin: 15px 0; }
 .fixed-order-row button { padding: 6px 10px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; }
 .fixed-order-row button:active { opacity: 0.85; }
 .fixed-order-help { font-size: 0.78rem; color: #64748b; margin: 6px 0 10px 2px; line-height: 1.35; }
+
+@media (max-width: 600px) {
+    html {
+        font-size: 107%;
+    }
+    body {
+        padding: 16px;
+    }
+    .theme-selector {
+        --theme-list-max: min(62vh, 520px);
+    }
+    .theme-item {
+        font-size: 0.95rem;
+    }
+    .slot-badge {
+        font-size: 0.85rem;
+        padding: 5px 9px;
+    }
+}

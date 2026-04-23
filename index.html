@@ -78,13 +78,13 @@
 
     <div class="card">
         <h2>⚙️ 일정 설정</h2>
-        <div style="display:flex; gap:10px;">
-            <div style="flex:1;">
-                <label>시작 가능 시간 <small style="font-weight:500;color:#94a3b8;">(클릭 또는 입력 · 24시간)</small></label>
+        <div class="schedule-settings-row">
+            <div class="schedule-settings-col">
+                <label for="startTime">시작 가능 시간 <small style="font-weight:500;color:#94a3b8;">(클릭 또는 입력 · 24시간)</small></label>
                 <input type="text" id="startTime" class="input-hhmm" value="17:25" placeholder="17:25" autocomplete="off" spellcheck="false">
             </div>
-            <div style="flex:1;">
-                <label>목표 개수</label>
+            <div class="schedule-settings-col">
+                <label for="targetCount">목표 개수</label>
                 <select id="targetCount">
                     <option value="2">2개</option>
                     <option value="3" selected>3개</option>
