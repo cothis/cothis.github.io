@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Escape Plan Pro</title>
-    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" crossorigin />
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -27,9 +27,9 @@
         </select>
         <label for="newDuration">소요시간(분)</label>
         <input type="number" id="newDuration" placeholder="소요시간 (분)">
-        <label for="newSlotTime">시간표 추가</label>
-        <div style="display:flex; gap:8px; align-items:center;">
-            <input type="time" id="newSlotTime" step="300" style="flex:1;">
+        <label for="newSlotTime">시간표 추가 <small style="font-weight:500;color:#94a3b8;">(클릭 또는 입력 · 24시간)</small></label>
+        <div class="slot-time-row" style="display:flex; gap:8px; align-items:center;">
+            <input type="text" id="newSlotTime" class="input-hhmm" placeholder="14:40" autocomplete="off" spellcheck="false" style="flex:1;">
             <button class="btn btn-secondary" style="width:auto; padding:10px 12px;" onclick="addSlot('new')">추가</button>
         </div>
         <div id="newSlotBadges" class="slot-badges" style="margin:8px 0 6px 0;"></div>
@@ -59,9 +59,9 @@
         <input type="text" id="editShop" placeholder="매장명">
         <label for="editDuration">소요시간(분)</label>
         <input type="number" id="editDuration" placeholder="소요시간 (분)">
-        <label for="editSlotTime">시간표 추가</label>
-        <div style="display:flex; gap:8px; align-items:center;">
-            <input type="time" id="editSlotTime" step="300" style="flex:1;">
+        <label for="editSlotTime">시간표 추가 <small style="font-weight:500;color:#94a3b8;">(클릭 또는 입력 · 24시간)</small></label>
+        <div class="slot-time-row" style="display:flex; gap:8px; align-items:center;">
+            <input type="text" id="editSlotTime" class="input-hhmm" placeholder="14:40" autocomplete="off" spellcheck="false" style="flex:1;">
             <button class="btn btn-secondary" style="width:auto; padding:10px 12px;" onclick="addSlot('edit')">추가</button>
         </div>
         <div id="editSlotBadges" class="slot-badges" style="margin:8px 0 6px 0;"></div>
@@ -80,8 +80,8 @@
         <h2>⚙️ 일정 설정</h2>
         <div style="display:flex; gap:10px;">
             <div style="flex:1;">
-                <label>시작 가능 시간</label>
-                <input type="time" id="startTime" value="17:25" step="300">
+                <label>시작 가능 시간 <small style="font-weight:500;color:#94a3b8;">(클릭 또는 입력 · 24시간)</small></label>
+                <input type="text" id="startTime" class="input-hhmm" value="17:25" placeholder="17:25" autocomplete="off" spellcheck="false">
             </div>
             <div style="flex:1;">
                 <label>목표 개수</label>
@@ -128,16 +128,29 @@
 
         <label style="display:flex; align-items:center; gap:10px; margin-top:4px; font-size:0.9rem; font-weight:600; color:#475569; cursor:pointer;">
             <input type="checkbox" id="mealEnabled" style="width:auto; margin:0;">
-            밥시간 반영 (아래 구간에는 테마가 겹치지 않게 계산)
+            밥시간 반영 (아래 구간 안에 ‘휴식·밥’으로 쓸 연속 시간이 있도록 계산)
         </label>
-        <div id="mealRangeRow" style="display:flex; gap:10px; opacity:0.5; pointer-events:none;">
-            <div style="flex:1;">
-                <label for="mealStart">밥시간 시작</label>
-                <input type="time" id="mealStart" value="18:00" step="300">
+        <div id="mealRangeRow" class="meal-fields-row" style="opacity:0.5; pointer-events:none;">
+            <div class="meal-field-col">
+                <label class="meal-field-label" for="mealStart">
+                    <span class="meal-field-label-main">밥시간 시작</span>
+                    <small class="meal-field-label-sub">가능한 범위</small>
+                </label>
+                <input type="text" id="mealStart" class="input-hhmm" value="18:00" placeholder="18:00" autocomplete="off" spellcheck="false">
             </div>
-            <div style="flex:1;">
-                <label for="mealEnd">밥시간 종료</label>
-                <input type="time" id="mealEnd" value="19:00" step="300">
+            <div class="meal-field-col">
+                <label class="meal-field-label" for="mealEnd">
+                    <span class="meal-field-label-main">밥시간 끝</span>
+                    <small class="meal-field-label-sub">가능한 범위</small>
+                </label>
+                <input type="text" id="mealEnd" class="input-hhmm" value="19:00" placeholder="19:00" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="meal-field-col">
+                <label class="meal-field-label" for="mealBreakMinutes">
+                    <span class="meal-field-label-main">휴식·밥 (분)</span>
+                    <small class="meal-field-label-sub">위 구간 안 연속 빈 시간</small>
+                </label>
+                <input type="number" id="mealBreakMinutes" min="5" max="300" step="5" value="40" inputmode="numeric">
             </div>
         </div>
 

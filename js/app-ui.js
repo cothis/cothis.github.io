@@ -19,15 +19,18 @@ function restoreStartTime() {
 var MEAL_ENABLED_KEY = 'epp.mealEnabled';
 var MEAL_START_KEY = 'epp.mealStart';
 var MEAL_END_KEY = 'epp.mealEnd';
+var MEAL_BREAK_MIN_KEY = 'epp.mealBreakMin';
 
 function saveMealSettings() {
     try {
         const en = document.getElementById('mealEnabled');
         const ms = document.getElementById('mealStart');
         const me = document.getElementById('mealEnd');
+        const mb = document.getElementById('mealBreakMinutes');
         if (en) localStorage.setItem(MEAL_ENABLED_KEY, en.checked ? '1' : '0');
         if (ms && ms.value && isValidTimeStr(ms.value)) localStorage.setItem(MEAL_START_KEY, ms.value);
         if (me && me.value && isValidTimeStr(me.value)) localStorage.setItem(MEAL_END_KEY, me.value);
+        if (mb && mb.value !== '') localStorage.setItem(MEAL_BREAK_MIN_KEY, mb.value);
     } catch (e) { /* ignore */ }
 }
 function restoreMealSettings() {
@@ -35,12 +38,15 @@ function restoreMealSettings() {
         const en = document.getElementById('mealEnabled');
         const ms = document.getElementById('mealStart');
         const me = document.getElementById('mealEnd');
+        const mb = document.getElementById('mealBreakMinutes');
         const savedEn = localStorage.getItem(MEAL_ENABLED_KEY);
         const savedS = localStorage.getItem(MEAL_START_KEY);
         const savedE = localStorage.getItem(MEAL_END_KEY);
+        const savedBr = localStorage.getItem(MEAL_BREAK_MIN_KEY);
         if (en && savedEn !== null) en.checked = savedEn === '1';
         if (ms && savedS && isValidTimeStr(savedS)) ms.value = savedS;
         if (me && savedE && isValidTimeStr(savedE)) me.value = savedE;
+        if (mb && savedBr !== null && savedBr !== '') mb.value = savedBr;
     } catch (e) { /* ignore */ }
     syncMealRowUi();
 }
@@ -63,6 +69,11 @@ function setupMealUi() {
             el.addEventListener('input', saveMealSettings);
         }
     });
+    const mealBr = document.getElementById('mealBreakMinutes');
+    if (mealBr) {
+        mealBr.addEventListener('change', saveMealSettings);
+        mealBr.addEventListener('input', saveMealSettings);
+    }
     syncMealRowUi();
 }
 
@@ -77,8 +88,8 @@ function setupStartTimePersistence() {
 
 function setupFiveMinuteEnforcement() {
     enforceFiveMinuteStepOn(document.getElementById('startTime'));
-    enforceFiveMinuteStepOn(document.getElementById('newSlotTime'));
-    enforceFiveMinuteStepOn(document.getElementById('editSlotTime'));
+    enforceFiveMinuteStepOn(document.getElementById('newSlotTime'), { onEnter: () => addSlot('new') });
+    enforceFiveMinuteStepOn(document.getElementById('editSlotTime'), { onEnter: () => addSlot('edit') });
     enforceFiveMinuteStepOn(document.getElementById('mealStart'));
     enforceFiveMinuteStepOn(document.getElementById('mealEnd'));
 }
@@ -149,6 +160,8 @@ function addSlot(prefix) {
     const next = uniqSortTimes(current);
     setSlotsToInput(prefix, next);
     renderSlotBadges(prefix);
+    timeEl.value = '';
+    timeEl.focus();
 }
 function applyCsv(prefix) {
     const parsed = getSlotsFromInput(prefix);
