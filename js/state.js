@@ -13,5 +13,6 @@ var THEME_FIXED_ORDER_STORAGE_KEY = 'epp.themeFixedOrderKeys';
 /** 순서 고정 테마의 "N번째" 절대 위치 제약(1-base) */
 var themeFixedPositionByKey = {};
 var THEME_FIXED_POSITION_STORAGE_KEY = 'epp.themeFixedPositions';
+var THEME_OVERRIDE_STORAGE_KEY = 'epp.themeDB_overrides';
 var formMode = 'add';
 var currentEditOldKey = null;

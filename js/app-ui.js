@@ -345,9 +345,22 @@ async function saveThemeFromForm() {
             return;
         }
         const key = makeKey(normalized.name, normalized.dayType);
-        const btn = document.getElementById('formSaveBtn');
-        btn.textContent = '저장 중...';
-        btn.disabled = true;
+        
+        // 로컬 즉시 반영
+        const newTheme = {
+            name: normalized.name,
+            dayType: normalized.dayType,
+            shop: normalized.shop,
+            duration: normalized.duration,
+            slots: normalized.slots
+        };
+        themeDB[key] = newTheme;
+        if (typeof setLocalOverride === 'function') setLocalOverride(key, newTheme);
+
+        renderThemeListFromDB();
+        resetFormFields();
+        closeEditSection();
+
         try {
             const payload = {
                 action: 'add',
@@ -358,62 +371,37 @@ async function saveThemeFromForm() {
                 dayType: normalized.dayType
             };
             await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-            alert('저장되었습니다!');
-            themeDB[key] = {
-                name: normalized.name,
-                dayType: normalized.dayType,
-                shop: normalized.shop,
-                duration: normalized.duration,
-                slots: normalized.slots
-            };
-            renderThemeListFromDB();
-            resetFormFields();
-            const sec = document.getElementById('addSection');
-            const tbtn = document.getElementById('toggleAddBtn');
-            if (sec && tbtn) {
-                sec.style.display = 'none';
-                tbtn.innerText = '테마 등록';
-            }
-        } catch (e) {
-            alert('저장 실패!');
-        } finally {
-            btn.textContent = '시트에 저장 및 새로고침';
-            btn.disabled = false;
-        }
+        } catch (e) { console.error('Sheet Sync Fail', e); }
     } else {
-        if (!currentEditOldKey) {
-            alert('수정할 테마가 선택되지 않았습니다.');
-            return;
-        }
+        if (!currentEditOldKey) return alert('수정할 테마가 선택되지 않았습니다.');
         const existing = new Set(Object.keys(themeDB).filter(n => n !== currentEditOldKey));
         const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots, dayType }, { existingKeys: existing });
         if (!ok) {
             alert(errors.join('\n'));
             return;
         }
+        
         const newKey = makeKey(normalized.name, normalized.dayType);
         const renamed = newKey !== currentEditOldKey;
+        
         if (renamed) {
-            if (excludedSlots[currentEditOldKey]) {
-                excludedSlots[newKey] = excludedSlots[currentEditOldKey];
-                delete excludedSlots[currentEditOldKey];
-            }
             delete themeDB[currentEditOldKey];
+            if (typeof setLocalOverride === 'function') setLocalOverride(currentEditOldKey, null);
         }
-        themeDB[newKey] = {
+        
+        const updatedTheme = {
             name: normalized.name,
             dayType: normalized.dayType,
             shop: normalized.shop,
             duration: normalized.duration,
             slots: normalized.slots
         };
+        themeDB[newKey] = updatedTheme;
+        if (typeof setLocalOverride === 'function') setLocalOverride(newKey, updatedTheme);
+        
         renderThemeListFromDB();
-        const sec = document.getElementById('addSection');
-        const tbtn = document.getElementById('toggleAddBtn');
-        if (sec && tbtn) {
-            sec.style.display = 'none';
-            tbtn.innerText = '테마 등록';
-        }
+        closeEditSection();
+
         try {
             const old = parseKey(currentEditOldKey);
             const payload = {
@@ -427,7 +415,7 @@ async function saveThemeFromForm() {
                 slots: normalized.slots.join(', ')
             };
             await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-        } catch (e) { /* ignore */ }
+        } catch (e) { console.error('Sheet Sync Fail', e); }
         currentEditOldKey = null;
         formMode = 'add';
     }
@@ -448,6 +436,22 @@ function deleteFromForm() {
     currentEditOldKey = null;
     formMode = 'add';
     deleteTheme(target);
+}
+
+async function deleteTheme(key) {
+    const t = themeDB[key];
+    if (!t) return;
+    if (!confirm(`'${t.name}' (${t.dayType}) 테마를 삭제하시겠습니까?`)) return;
+    
+    delete themeDB[key];
+    if (typeof setLocalOverride === 'function') setLocalOverride(key, null); 
+    
+    if (excludedSlots[key]) delete excludedSlots[key];
+    renderThemeListFromDB();
+    try {
+        const payload = { action: 'delete', name: t.name, dayType: t.dayType };
+        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+    } catch (e) { console.error('Sheet Sync Fail', e); }
 }
 
 function viewSlots(key) {
@@ -834,11 +838,30 @@ function toggleSlot(key, slot) {
     renderThemeListFromDB();
 }
 
+function getLocalOverrides() {
+    try {
+        const s = localStorage.getItem(THEME_OVERRIDE_STORAGE_KEY);
+        return s ? JSON.parse(s) : {};
+    } catch (e) { return {}; }
+}
+
+function setLocalOverride(key, data) {
+    const overrides = getLocalOverrides();
+    if (data === null) overrides[key] = null; // null means deleted
+    else overrides[key] = data;
+    localStorage.setItem(THEME_OVERRIDE_STORAGE_KEY, JSON.stringify(overrides));
+}
+
 async function loadThemes() {
     const selector = document.getElementById('themeSelector');
     try {
-        const res = await fetch(SCRIPT_URL);
-        const data = await res.json();
+        // 1. data.json에서 데이터 로드
+        const localRes = await fetch('data.json');
+        const data = await localRes.json();
+
+        // 2. Apps Script 기록용 호출 (비동기로 던지고 응답은 무시)
+        fetch(SCRIPT_URL).catch(() => {});
+
         selector.innerHTML = '';
         themeDB = {};
 
@@ -850,112 +873,19 @@ async function loadThemes() {
             const key = makeKey(name, dayType);
             themeDB[key] = { name, dayType, shop: item.shop, duration, slots };
         });
+
+        // 3. 로컬 오버라이드 적용 (동기화 전 변경사항 반영)
+        const overrides = getLocalOverrides();
+        Object.keys(overrides).forEach(k => {
+            if (overrides[k] === null) {
+                delete themeDB[k];
+            } else {
+                themeDB[k] = overrides[k];
+            }
+        });
+
         renderThemeListFromDB();
     } catch (e) {
         selector.innerHTML = '<div class="loading-spinner">데이터를 불러오지 못했습니다.</div>';
     }
-}
-
-async function addThemeToSheet() {
-    const name = document.getElementById('newName').value;
-    const shop = document.getElementById('newShop').value;
-    const duration = document.getElementById('newDuration').value;
-    const slots = document.getElementById('newSlots').value;
-
-    const existingNames = new Set(Object.keys(themeDB));
-    const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots }, { existingKeys: existingNames });
-    if (!ok) {
-        alert(errors.join('\n'));
-        return;
-    }
-
-    const btn = document.querySelector('#addSection .btn');
-    btn.innerText = '저장 중...';
-    btn.disabled = true;
-
-    try {
-        const payload = {
-            action: 'add',
-            name: normalized.name,
-            shop: normalized.shop,
-            duration: normalized.duration,
-            slots: normalized.slots.join(', ')
-        };
-        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-        alert('저장되었습니다!');
-        themeDB[normalized.name] = { shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
-        renderThemeListFromDB();
-        document.getElementById('newName').value = '';
-        document.getElementById('newShop').value = '';
-        document.getElementById('newDuration').value = '';
-        document.getElementById('newSlots').value = '';
-        renderSlotBadges('new');
-        const add = document.getElementById('addSection');
-        const tbtn = document.getElementById('toggleAddBtn');
-        if (add && tbtn) {
-            add.style.display = 'none';
-            tbtn.innerText = '테마 등록';
-        }
-    } catch (e) {
-        alert('저장 실패!');
-    } finally {
-        btn.innerText = '시트에 저장 및 새로고침';
-        btn.disabled = false;
-    }
-}
-
-async function editTheme(oldName) {
-    const data = themeDB[oldName];
-    if (!data) return alert('해당 테마를 찾을 수 없습니다.');
-    const name = prompt('테마명', oldName);
-    if (name === null) return;
-    const shop = prompt('매장명', data.shop ?? '');
-    if (shop === null) return;
-    const duration = prompt('소요시간(분)', String(data.duration ?? ''));
-    if (duration === null) return;
-    const slots = prompt('시간표 (쉼표로 구분: 10:00, 11:20)', (data.slots || []).join(', '));
-    if (slots === null) return;
-
-    const existing = new Set(Object.keys(themeDB).filter(n => n !== oldName));
-    const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots }, { existingKeys: existing });
-    if (!ok) {
-        alert(errors.join('\n'));
-        return;
-    }
-
-    const renamed = normalized.name !== oldName;
-    if (renamed) {
-        if (excludedSlots[oldName]) {
-            excludedSlots[normalized.name] = excludedSlots[oldName];
-            delete excludedSlots[oldName];
-        }
-        delete themeDB[oldName];
-    }
-    themeDB[normalized.name] = { shop: normalized.shop, duration: normalized.duration, slots: normalized.slots };
-    renderThemeListFromDB();
-
-    try {
-        const payload = {
-            action: 'update',
-            oldName,
-            name: normalized.name,
-            shop: normalized.shop,
-            duration: normalized.duration,
-            slots: normalized.slots.join(', ')
-        };
-        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-    } catch (e) { /* ignore */ }
-}
-
-async function deleteTheme(key) {
-    const t = themeDB[key];
-    if (!t) return;
-    if (!confirm(`'${t.name}' (${t.dayType}) 테마를 삭제하시겠습니까?`)) return;
-    delete themeDB[key];
-    if (excludedSlots[key]) delete excludedSlots[key];
-    renderThemeListFromDB();
-    try {
-        const payload = { action: 'delete', name: t.name, dayType: t.dayType };
-        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-    } catch (e) {}
 }
