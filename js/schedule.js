@@ -4,6 +4,108 @@ function resolveSameShopGapMinutes(prevKey, currKey, globalSame, overrideMap) {
     return globalSame;
 }
 
+/** 슬롯 격자 무시·분 단위로만 이어 붙인 낙관적 종료 시각(연속 완화). 이 값은 이산 최적해의 하한. */
+function relaxationLowerBoundEndAfter(lastEndMs, lastKey, lastShop, fromIdx, order, sameGap, diffGap, sameGapOverrides) {
+    let t = lastEndMs;
+    let pk = lastKey;
+    let ps = lastShop;
+    for (let j = fromIdx; j < order.length; j++) {
+        const key = order[j];
+        const data = themeDB[key];
+        if (!data) return Infinity;
+        const gapMin =
+            ps === data.shop
+                ? resolveSameShopGapMinutes(pk, key, sameGap, sameGapOverrides)
+                : diffGap;
+        t += gapMin * 60000;
+        t += data.duration * 60000;
+        pk = key;
+        ps = data.shop;
+    }
+    return t;
+}
+
+/**
+ * 고정 상대순서 + 일부 절대 위치(1-base) 제약을 동시에 만족하는 모든 순서.
+ * 반환: { orders, error }  error가 있으면 조합 자체가 불가능.
+ */
+function enumerateOrdersWithConstraints(allKeys, fixedOrdered, fixedPosMap, targetCount) {
+    const n = targetCount;
+    const available = [...allKeys];
+    const fixedSet = new Set(fixedOrdered);
+    const posToKey = new Map();
+
+    for (let i = 0; i < fixedOrdered.length; i++) {
+        const key = fixedOrdered[i];
+        const p1 = fixedPosMap && Number.isFinite(fixedPosMap[key]) ? fixedPosMap[key] : null;
+        if (p1 == null) continue;
+        if (p1 < 1 || p1 > n) {
+            return { orders: [], error: `지정 위치는 1~${n} 범위여야 합니다.` };
+        }
+        const p = p1 - 1;
+        if (posToKey.has(p) && posToKey.get(p) !== key) {
+            return { orders: [], error: `같은 위치(${p1}번째)에 테마를 2개 이상 고정할 수 없습니다.` };
+        }
+        posToKey.set(p, key);
+    }
+
+    for (let i = 0; i < fixedOrdered.length; i++) {
+        for (let j = i + 1; j < fixedOrdered.length; j++) {
+            const ki = fixedOrdered[i];
+            const kj = fixedOrdered[j];
+            const pi = fixedPosMap && Number.isFinite(fixedPosMap[ki]) ? fixedPosMap[ki] : null;
+            const pj = fixedPosMap && Number.isFinite(fixedPosMap[kj]) ? fixedPosMap[kj] : null;
+            if (pi != null && pj != null && pi > pj) {
+                return { orders: [], error: '고정 순서와 고정 위치가 충돌합니다. 위치를 조정하세요.' };
+            }
+        }
+    }
+
+    const results = [];
+    function rec(pos, rem, fixedCursor, path) {
+        if (pos === n) {
+            if (rem.length === 0 && fixedCursor === fixedOrdered.length) results.push(path.slice());
+            return;
+        }
+
+        const locked = posToKey.get(pos);
+        if (locked) {
+            if (!rem.includes(locked)) return;
+            if (fixedSet.has(locked) && fixedOrdered[fixedCursor] !== locked) return;
+            const nextRem = rem.filter(k => k !== locked);
+            const nextCur = fixedSet.has(locked) ? fixedCursor + 1 : fixedCursor;
+            rec(pos + 1, nextRem, nextCur, [...path, locked]);
+            return;
+        }
+
+        for (let i = 0; i < rem.length; i++) {
+            const k = rem[i];
+            if (fixedSet.has(k) && fixedOrdered[fixedCursor] !== k) continue;
+            const nextRem = [...rem.slice(0, i), ...rem.slice(i + 1)];
+            const nextCur = fixedSet.has(k) ? fixedCursor + 1 : fixedCursor;
+            rec(pos + 1, nextRem, nextCur, [...path, k]);
+        }
+    }
+    rec(0, available, 0, []);
+    return { orders: results, error: null };
+}
+
+/** arr 원소 중 크기 n 조합 중 must 집합을 모두 포함하는 것만 */
+function getCombinationsContainingAll(arr, n, mustSet) {
+    const mustArr = [...mustSet].filter(k => arr.includes(k));
+    if (mustArr.length !== mustSet.size) return [];
+    if (mustArr.length > n) return [];
+    const restPool = arr.filter(k => !mustSet.has(k));
+    const need = n - mustArr.length;
+    if (need < 0) return [];
+    if (need === 0) return [mustArr.slice()];
+    const subs = getCombinations(restPool, need);
+    return subs.map(s => [...mustArr, ...s]);
+}
+
+/** 루트 탐색 횟수 상한 (순열·조합 폭주 방지) */
+var MAX_SCHEDULE_ROOT_CALLS = 800000;
+
 function runCalculation() {
     const rawSelected = Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value);
     const selectedKeys = [...new Set(rawSelected)];
@@ -14,6 +116,8 @@ function runCalculation() {
     const diffGap = Math.max(0, parseInt(document.getElementById('diffGap').value, 10) || 25);
     const sameGapOverrides =
         typeof readThemeSameGapOverridesFromDom === 'function' ? readThemeSameGapOverridesFromDom() : {};
+    const fixedPosOverrides =
+        typeof readThemeFixedPositionsFromDom === 'function' ? readThemeFixedPositionsFromDom() : {};
 
     if (!Number.isFinite(targetCount) || targetCount < 1) return alert('목표 개수는 1 이상의 숫자로 입력하세요.');
     if (selectedKeys.length < targetCount) return alert(`최소 ${targetCount}개를 선택하세요.`);
@@ -41,30 +145,90 @@ function runCalculation() {
 
     const useFixedOrder = document.getElementById('useFixedOrder')?.checked;
     const validResults = [];
+    const searchCtx = { bestEndMs: Infinity };
+    const rootCalls = { n: 0 };
+    let hitRootLimit = false;
+    let generatedOrderCount = 0;
+
+    const runOneOrder = order => {
+        if (rootCalls.n >= MAX_SCHEDULE_ROOT_CALLS) {
+            hitRootLimit = true;
+            return;
+        }
+        rootCalls.n++;
+        findSchedule(
+            0,
+            [],
+            null,
+            null,
+            order,
+            sameGap,
+            diffGap,
+            sameGapOverrides,
+            searchCtx,
+            validResults,
+            mealRange,
+            mealBreakMs
+        );
+    };
 
     if (useFixedOrder) {
         const checked = new Set(selectedKeys);
-        let order = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
-        const missing = selectedKeys.filter(k => !order.includes(k)).sort(compareThemeKeys);
-        order = [...order, ...missing];
-        if (order.length < targetCount) {
-            alert(`지정 순서 모드: 체크한 테마가 목표 개수(${targetCount})보다 적습니다. 테마를 더 선택하거나 목표 개수를 줄이세요.`);
+        const F = themeFixedOrderKeys.filter(k => checked.has(k) && themeDB[k]);
+        if (F.length === 0) {
+            alert('지정 순서 모드: 아래 패널에서 순서에 넣을 테마를 추가하세요. (체크만으로는 적용되지 않습니다.)');
             return;
         }
-        order = order.slice(0, targetCount);
-        findSchedule(0, [], null, null, order, sameGap, diffGap, sameGapOverrides, validResults, mealRange, mealBreakMs);
+        if (F.length > targetCount) {
+            alert(`지정 순서에 있는 테마가 목표 개수(${targetCount})보다 많습니다. 순서에서 빼거나 목표 개수를 늘리세요.`);
+            return;
+        }
+        const posKeys = Object.keys(fixedPosOverrides).filter(k => F.includes(k));
+        if (posKeys.length > 0) {
+            for (let i = 0; i < posKeys.length; i++) {
+                const k = posKeys[i];
+                if (fixedPosOverrides[k] > targetCount) {
+                    alert(`${themeDB[k]?.name || k}의 지정 위치(${fixedPosOverrides[k]}번째)가 목표 개수(${targetCount})를 초과합니다.`);
+                    return;
+                }
+            }
+        }
+        const combis = getCombinationsContainingAll(selectedKeys, targetCount, new Set(F));
+        if (combis.length === 0) {
+            alert('선택·목표 개수·지정 순서 조합을 만족하는 경우가 없습니다. 테마를 더 체크하거나 목표 개수를 조정하세요.');
+            return;
+        }
+        for (let ci = 0; ci < combis.length && !hitRootLimit; ci++) {
+            const combo = combis[ci];
+            const fixedInCombo = F.filter(k => combo.includes(k));
+            const { orders, error } = enumerateOrdersWithConstraints(combo, fixedInCombo, fixedPosOverrides, targetCount);
+            if (error) {
+                alert(error);
+                return;
+            }
+            generatedOrderCount += orders.length;
+            for (let oi = 0; oi < orders.length && !hitRootLimit; oi++) {
+                runOneOrder(orders[oi]);
+            }
+        }
+        if (generatedOrderCount === 0) {
+            alert('고정 순서/위치 제약을 만족하는 순서가 없습니다. 순서/위치를 조정해 주세요.');
+            return;
+        }
     } else {
         const combis = getCombinations(selectedKeys, targetCount);
-        combis.forEach(set => {
-            getPermutations(set).forEach(order => {
-                findSchedule(0, [], null, null, order, sameGap, diffGap, sameGapOverrides, validResults, mealRange, mealBreakMs);
-            });
-        });
+        for (let ci = 0; ci < combis.length && !hitRootLimit; ci++) {
+            const set = combis[ci];
+            const perms = getPermutations(set);
+            for (let pi = 0; pi < perms.length && !hitRootLimit; pi++) {
+                runOneOrder(perms[pi]);
+            }
+        }
     }
     const mealRenderOpts = mealEnabled && mealRange
         ? { mealRange, mealWindowLabel: `${mealStartVal}~${mealEndVal}` }
         : null;
-    renderResults(validResults, mealRenderOpts);
+    renderResults(validResults, mealRenderOpts, hitRootLimit ? { rootCalls: rootCalls.n, rootLimit: MAX_SCHEDULE_ROOT_CALLS } : null);
 }
 
 /**
@@ -72,7 +236,20 @@ function runCalculation() {
  * 첫 테마 슬롯은 기존처럼 당일(기준일)만 사용 — 시작 가능 시각보다 이른 코스는 선택되지 않음.
  * 두 번째부터는 minStartMs 이후 earliestClockAtOrAfter로 맞추며, 다음 날로 넘길 때는 새벽(06:00 미만)만 허용.
  */
-function findSchedule(idx, currentSched, lastEndMs, lastShop, order, sameGap, diffGap, sameGapOverrides, validResults, mealRange, mealBreakMs) {
+function findSchedule(
+    idx,
+    currentSched,
+    lastEndMs,
+    lastShop,
+    order,
+    sameGap,
+    diffGap,
+    sameGapOverrides,
+    searchCtx,
+    validResults,
+    mealRange,
+    mealBreakMs
+) {
     if (idx === order.length) {
         if (mealRange && mealBreakMs > 0 && !scheduleAllowsMealBreak(currentSched, mealRange, mealBreakMs)) {
             return;
@@ -80,6 +257,9 @@ function findSchedule(idx, currentSched, lastEndMs, lastShop, order, sameGap, di
         const endMsSort = scheduleEndInstantMs(currentSched);
         const endLabel = endMsSort > 0 ? formatHmFromMs(endMsSort) : '';
         validResults.push({ schedule: [...currentSched], endTime: endLabel, endInstantMs: endMsSort });
+        if (searchCtx && Number.isFinite(endMsSort) && endMsSort < searchCtx.bestEndMs) {
+            searchCtx.bestEndMs = endMsSort;
+        }
         return;
     }
     const key = order[idx];
@@ -116,6 +296,19 @@ function findSchedule(idx, currentSched, lastEndMs, lastShop, order, sameGap, di
     candidates.sort((a, b) => a.startMs - b.startMs);
 
     candidates.forEach(({ startMs, endMs }) => {
+        if (searchCtx && Number.isFinite(searchCtx.bestEndMs)) {
+            const lbRest = relaxationLowerBoundEndAfter(
+                endMs,
+                key,
+                data.shop,
+                idx + 1,
+                order,
+                sameGap,
+                diffGap,
+                sameGapOverrides
+            );
+            if (lbRest > searchCtx.bestEndMs) return;
+        }
         const startStr = formatHmFromMs(startMs);
         const endStr = formatHmFromMs(endMs);
         currentSched.push({
@@ -128,7 +321,20 @@ function findSchedule(idx, currentSched, lastEndMs, lastShop, order, sameGap, di
             _startMs: startMs,
             _endMs: endMs
         });
-        findSchedule(idx + 1, currentSched, endMs, data.shop, order, sameGap, diffGap, sameGapOverrides, validResults, mealRange, mealBreakMs);
+        findSchedule(
+            idx + 1,
+            currentSched,
+            endMs,
+            data.shop,
+            order,
+            sameGap,
+            diffGap,
+            sameGapOverrides,
+            searchCtx,
+            validResults,
+            mealRange,
+            mealBreakMs
+        );
         currentSched.pop();
     });
 }
@@ -213,7 +419,7 @@ function dedupeScheduleResults(results) {
     });
 }
 
-function renderResults(results, mealRenderOpts) {
+function renderResults(results, mealRenderOpts, limitMeta) {
     results = dedupeScheduleResults(results);
     /**
      * 1) 전체 종료 시각 오름차순(일정을 빨리 끝내는 쪽 우선).
@@ -239,7 +445,11 @@ function renderResults(results, mealRenderOpts) {
         container.innerHTML = "<p style='text-align:center; color:#94a3b8;'>조건에 맞는 일정이 없습니다.</p>";
         return;
     }
-    container.innerHTML = `<h3 style="margin-left:5px;">검색 결과 ${results.length}건</h3>`;
+    let limitNote = '';
+    if (limitMeta && limitMeta.rootCalls >= limitMeta.rootLimit) {
+        limitNote = `<p style="font-size:0.82rem;color:#b45309;margin:4px 0 10px 5px;">조합 상한(${limitMeta.rootLimit.toLocaleString()}회)에 도달해 일부 순서만 탐색했습니다. 선택 테마·목표 개수를 줄이거나 지정 순서를 쓰면 빨라집니다.</p>`;
+    }
+    container.innerHTML = `<h3 style="margin-left:5px;">검색 결과 ${results.length}건</h3>${limitNote}`;
     results.slice(0, 10).forEach((res, i) => {
         const card = document.createElement('div');
         card.className = 'result-item';

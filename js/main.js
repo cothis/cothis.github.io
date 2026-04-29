@@ -1,4 +1,6 @@
 loadThemeSameGapsFromStorage();
+loadThemeFixedOrderFromStorage();
+loadThemeFixedPositionsFromStorage();
 loadThemeListSortFromStorage();
 setupStartTimePersistence();
 setupMealUi();

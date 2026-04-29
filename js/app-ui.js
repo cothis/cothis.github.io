@@ -67,6 +67,47 @@ function saveThemeListSortToStorage() {
     } catch (e) { /* ignore */ }
 }
 
+function loadThemeFixedOrderFromStorage() {
+    try {
+        const s = localStorage.getItem(THEME_FIXED_ORDER_STORAGE_KEY);
+        if (!s) return;
+        const a = JSON.parse(s);
+        if (Array.isArray(a)) themeFixedOrderKeys = a.filter(k => typeof k === 'string');
+    } catch (e) { /* ignore */ }
+}
+
+function saveThemeFixedOrderToStorage() {
+    try {
+        localStorage.setItem(THEME_FIXED_ORDER_STORAGE_KEY, JSON.stringify(themeFixedOrderKeys));
+    } catch (e) { /* ignore */ }
+}
+
+function loadThemeFixedPositionsFromStorage() {
+    try {
+        const s = localStorage.getItem(THEME_FIXED_POSITION_STORAGE_KEY);
+        if (!s) return;
+        const o = JSON.parse(s);
+        if (o && typeof o === 'object') themeFixedPositionByKey = o;
+    } catch (e) { /* ignore */ }
+}
+
+function saveThemeFixedPositionsToStorage() {
+    try {
+        localStorage.setItem(THEME_FIXED_POSITION_STORAGE_KEY, JSON.stringify(themeFixedPositionByKey));
+    } catch (e) { /* ignore */ }
+}
+
+function readThemeFixedPositionsFromDom() {
+    const out = {};
+    document.querySelectorAll('.fixed-order-pos-input').forEach(el => {
+        const key = el.dataset.themeKey;
+        if (!key) return;
+        const v = parseInt((el.value || '').trim(), 10);
+        if (Number.isFinite(v) && v >= 1) out[key] = v;
+    });
+    return out;
+}
+
 var START_TIME_KEY = 'epp.startTime';
 function saveStartTime() {
     try {
@@ -436,6 +477,37 @@ function compareThemeKeys(ka, kb) {
     return String(ka).localeCompare(String(kb), 'ko');
 }
 
+function renderSelectedThemeSummary() {
+    const box = document.getElementById('selectedThemeSummary');
+    if (!box) return;
+    const keys = Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked'))
+        .map(el => el.value)
+        .filter(k => !!themeDB[k])
+        .sort(compareThemeKeys);
+    if (keys.length === 0) {
+        box.innerHTML = '';
+        box.style.display = 'none';
+        return;
+    }
+    box.style.display = 'block';
+    const items = keys.map(k => {
+        const d = themeDB[k];
+        return `<span class="selected-theme-chip"><b>${escapeHtml(d.name)}</b> <small>(${escapeHtml(d.shop)})</small></span>`;
+    }).join('');
+    box.innerHTML = `
+        <div class="selected-theme-summary-title">선택한 테마 다시 보기 (${keys.length})</div>
+        <div class="selected-theme-summary-list">${items}</div>
+    `;
+}
+
+/** 선택된 테마 수와 목표 개수 입력을 맞춤 (선택 0개일 때는 최소 1) */
+function syncTargetCountWithSelection() {
+    const el = document.getElementById('targetCount');
+    if (!el) return;
+    const n = document.querySelectorAll('#themeSelector input[type="checkbox"]:checked').length;
+    el.value = String(Math.max(1, n));
+}
+
 function renderThemeListFromDB() {
     const selector = document.getElementById('themeSelector');
     snapshotThemeSameGapInputs();
@@ -457,13 +529,19 @@ function renderThemeListFromDB() {
     const allEntries = Object.entries(themeDB).sort((a, b) => compareThemeKeys(a[0], b[0]));
     const entries = allEntries.filter(([key, data]) => normalizeDayType(data.dayType) === selectedDayType);
     let invalidCount = 0;
+
+    const rowsMeta = [];
     entries.forEach(([key, data]) => {
         const { ok, errors } = validateTheme(
             { name: data.name, shop: data.shop, duration: data.duration, slots: data.slots, dayType: data.dayType },
             { allowExistingName: true }
         );
         if (!ok) invalidCount++;
+        rowsMeta.push({ key, data, ok, errors });
+    });
 
+    function appendThemeRow(meta) {
+        const { key, data, ok, errors } = meta;
         const row = document.createElement('div');
         row.className = 'theme-item';
 
@@ -474,12 +552,12 @@ function renderThemeListFromDB() {
         if (prevSelected.has(key) && ok) cb.checked = true;
         row.appendChild(cb);
 
-        const meta = document.createElement('div');
-        meta.className = 'theme-meta';
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'theme-meta';
         const title = document.createElement('div');
         const warn = ok ? '' : `(비정상: ${errors[0]})`;
         title.innerHTML = `${data.name} <small style="color:#94a3b8">(${data.shop}, ${data.duration}분)</small> <span class="badge">${data.dayType}</span> ${ok ? '' : `<small style='color:#ef4444'>${warn}</small>`}`;
-        meta.appendChild(title);
+        metaDiv.appendChild(title);
 
         const badges = document.createElement('div');
         badges.className = 'slot-badges';
@@ -493,7 +571,7 @@ function renderThemeListFromDB() {
             span.onclick = () => toggleSlot(key, slot);
             badges.appendChild(span);
         });
-        meta.appendChild(badges);
+        metaDiv.appendChild(badges);
 
         const gapRow = document.createElement('div');
         gapRow.className = 'theme-same-gap-row';
@@ -513,15 +591,18 @@ function renderThemeListFromDB() {
         gapInput.addEventListener('change', snapshotThemeSameGapInputs);
         gapRow.appendChild(gapLabel);
         gapRow.appendChild(gapInput);
-        meta.appendChild(gapRow);
+        metaDiv.appendChild(gapRow);
 
-        row.appendChild(meta);
+        row.appendChild(metaDiv);
         selector.appendChild(row);
-    });
+    }
+
+    rowsMeta.forEach(appendThemeRow);
+
     const checkedNow = Array.from(selector.querySelectorAll('input[type=checkbox]:checked')).map(el => el.value);
-    themeOrderPreference = themeOrderPreference.filter(k => checkedNow.includes(k) && themeDB[k]);
-    checkedNow.forEach(k => {
-        if (!themeOrderPreference.includes(k)) themeOrderPreference.push(k);
+    themeFixedOrderKeys = themeFixedOrderKeys.filter(k => checkedNow.includes(k) && themeDB[k]);
+    Object.keys(themeFixedPositionByKey).forEach(k => {
+        if (!themeFixedOrderKeys.includes(k)) delete themeFixedPositionByKey[k];
     });
 
     const sum = document.getElementById('consistencySummary');
@@ -533,45 +614,96 @@ function renderThemeListFromDB() {
     if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
 
     renderManagementBar();
+    syncTargetCountWithSelection();
+    renderSelectedThemeSummary();
     saveSelectedThemeKeysToStorage();
+    saveThemeFixedOrderToStorage();
+    saveThemeFixedPositionsToStorage();
 }
 
 function renderThemeOrderPanel() {
     const wrap = document.getElementById('themeOrderPanelWrap');
     const panel = document.getElementById('themeOrderPanel');
+    const addSelect = document.getElementById('fixedOrderAddSelect');
+    const addBtn = document.getElementById('fixedOrderAddBtn');
     if (!wrap || !panel) return;
     const useFixed = document.getElementById('useFixedOrder')?.checked;
     wrap.style.display = useFixed ? 'block' : 'none';
     if (!useFixed) {
         panel.innerHTML = '';
+        if (addSelect) addSelect.innerHTML = '';
         return;
     }
 
     const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
-    let ordered = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
-    const tail = [...checked].filter(k => !ordered.includes(k)).sort(compareThemeKeys);
-    ordered = [...ordered, ...tail];
-    themeOrderPreference = [...ordered, ...themeOrderPreference.filter(k => !ordered.includes(k))];
+    const ordered = themeFixedOrderKeys.filter(k => checked.has(k) && themeDB[k]);
+
+    if (addSelect) {
+        addSelect.innerHTML = '';
+        const opt0 = document.createElement('option');
+        opt0.value = '';
+        opt0.textContent = '순서에 넣을 테마 선택…';
+        addSelect.appendChild(opt0);
+        [...checked].sort(compareThemeKeys).forEach(k => {
+            if (ordered.includes(k)) return;
+            const d = themeDB[k];
+            if (!d) return;
+            const o = document.createElement('option');
+            o.value = k;
+            o.textContent = `${d.name} (${d.shop})`;
+            addSelect.appendChild(o);
+        });
+        if (addBtn) addBtn.disabled = addSelect.options.length <= 1;
+    }
 
     if (ordered.length === 0) {
-        panel.innerHTML = '<p style="font-size:0.85rem; color:#94a3b8; margin:0;">테마를 체크하면 순서 목록이 표시됩니다.</p>';
+        panel.innerHTML =
+            '<p style="font-size:0.85rem; color:#94a3b8; margin:0;">순서를 고정할 테마만 아래에서 추가하세요. 체크만으로는 포함되지 않습니다.</p>';
         return;
     }
     panel.innerHTML = '';
     ordered.forEach((key, idx) => {
         const data = themeDB[key];
         if (!data) return;
+        const posVal = Number.isFinite(parseInt(themeFixedPositionByKey[key], 10))
+            ? parseInt(themeFixedPositionByKey[key], 10)
+            : '';
         const row = document.createElement('div');
         row.className = 'fixed-order-row';
         row.innerHTML = `
                 <span style="font-weight:700; color:#64748b; min-width:1.2rem;">${idx + 1}</span>
                 <span class="order-label"><strong>${escapeHtml(data.name)}</strong> <small style="color:#94a3b8;">(${escapeHtml(data.shop)})</small></span>
-                <button type="button" aria-label="위로">↑</button>
-                <button type="button" aria-label="아래로">↓</button>
+                <label class="fixed-order-pos-wrap" title="비우면 상대순서만 고정, 숫자 입력 시 N번째 위치로 고정">
+                    <span>위치</span>
+                    <input type="number" class="fixed-order-pos-input" data-theme-key="${escapeHtml(key)}" min="1" step="1" value="${posVal}">
+                </label>
+                <button type="button" class="fixed-order-move" aria-label="위로">↑</button>
+                <button type="button" class="fixed-order-move" aria-label="아래로">↓</button>
+                <button type="button" class="fixed-order-remove" aria-label="제거">✕</button>
             `;
-        const [btnUp, btnDown] = row.querySelectorAll('button');
+        const [btnUp, btnDown, btnRm] = row.querySelectorAll('button');
+        const posInput = row.querySelector('.fixed-order-pos-input');
+        if (posInput) {
+            posInput.addEventListener('input', () => {
+                const v = parseInt((posInput.value || '').trim(), 10);
+                if (!Number.isFinite(v) || v < 1) delete themeFixedPositionByKey[key];
+                else themeFixedPositionByKey[key] = v;
+                saveThemeFixedPositionsToStorage();
+            });
+            posInput.addEventListener('change', () => {
+                const v = parseInt((posInput.value || '').trim(), 10);
+                if (!Number.isFinite(v) || v < 1) {
+                    delete themeFixedPositionByKey[key];
+                    posInput.value = '';
+                } else {
+                    themeFixedPositionByKey[key] = v;
+                }
+                saveThemeFixedPositionsToStorage();
+            });
+        }
         btnUp.onclick = () => moveThemeOrder(key, -1);
         btnDown.onclick = () => moveThemeOrder(key, 1);
+        btnRm.onclick = () => removeThemeFromFixedOrder(key);
         panel.appendChild(row);
     });
 }
@@ -584,11 +716,17 @@ function escapeHtml(s) {
         .replace(/"/g, '&quot;');
 }
 
+function removeThemeFromFixedOrder(key) {
+    themeFixedOrderKeys = themeFixedOrderKeys.filter(k => k !== key);
+    saveThemeFixedOrderToStorage();
+    delete themeFixedPositionByKey[key];
+    saveThemeFixedPositionsToStorage();
+    renderThemeOrderPanel();
+}
+
 function moveThemeOrder(key, delta) {
     const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
-    let ordered = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
-    const tail = [...checked].filter(k => !ordered.includes(k)).sort(compareThemeKeys);
-    ordered = [...ordered, ...tail];
+    let ordered = themeFixedOrderKeys.filter(k => checked.has(k) && themeDB[k]);
     const i = ordered.indexOf(key);
     if (i < 0) return;
     const j = i + delta;
@@ -596,19 +734,23 @@ function moveThemeOrder(key, delta) {
     const t = ordered[i];
     ordered[i] = ordered[j];
     ordered[j] = t;
-    themeOrderPreference = [...ordered, ...themeOrderPreference.filter(k => !ordered.includes(k))];
+    themeFixedOrderKeys = [...ordered, ...themeFixedOrderKeys.filter(k => !ordered.includes(k))];
+    saveThemeFixedOrderToStorage();
     renderThemeOrderPanel();
 }
 
 function onThemeSelectorChange(e) {
     if (!e.target || e.target.type !== 'checkbox') return;
     const key = e.target.value;
-    if (e.target.checked) {
-        if (!themeOrderPreference.includes(key)) themeOrderPreference.push(key);
-    } else {
-        themeOrderPreference = themeOrderPreference.filter(k => k !== key);
+    if (!e.target.checked) {
+        themeFixedOrderKeys = themeFixedOrderKeys.filter(k => k !== key);
+        saveThemeFixedOrderToStorage();
+        delete themeFixedPositionByKey[key];
+        saveThemeFixedPositionsToStorage();
     }
     if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
+    syncTargetCountWithSelection();
+    renderSelectedThemeSummary();
     saveSelectedThemeKeysToStorage();
 }
 
@@ -616,7 +758,18 @@ function setupFixedOrderUi() {
     document.getElementById('useFixedOrder')?.addEventListener('change', () => {
         renderThemeOrderPanel();
     });
+    document.getElementById('targetCount')?.addEventListener('input', () => {
+        if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
+    });
     document.getElementById('themeSelector')?.addEventListener('change', onThemeSelectorChange);
+    document.getElementById('fixedOrderAddBtn')?.addEventListener('click', () => {
+        const sel = document.getElementById('fixedOrderAddSelect');
+        if (!sel || !sel.value) return;
+        const k = sel.value;
+        if (!themeFixedOrderKeys.includes(k)) themeFixedOrderKeys.push(k);
+        saveThemeFixedOrderToStorage();
+        renderThemeOrderPanel();
+    });
 }
 
 async function postToSheet(payload) {
