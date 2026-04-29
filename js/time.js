@@ -283,7 +283,7 @@ function roundTo5MinutesStr(s) {
 }
 /**
  * 5분 단위 보정은 포커스 아웃·change 시만 수행 (input마다 두면 타이핑 도중 깨짐).
- * PC 텍스트: `1220` 등은 먼저 HH:MM으로 펼친 뒤 스냅. `type=time`은 브라우저 값 그대로.
+ * 텍스트: `1220` 등은 먼저 HH:MM으로 펼친 뒤 스냅.
  * @param {Object} [options] options.onEnter: Enter 키 시 blur 대신 호출 (시간표 추가 등)
  */
 function enforceFiveMinuteStepOn(el, options) {
@@ -328,38 +328,21 @@ function enforceFiveMinuteStepOn(el, options) {
     snapIfNeeded();
 }
 
-/** 모바일: 네이티브 type=time(step 300). PC: 텍스트 + 아래 스냅·1220 처리 */
+/** 모든 환경에서 텍스트 입력(1220 등) + 포커스 아웃 시 5분 스냅 */
 const TIME_PICKER_IDS = ['startTime', 'newSlotTime', 'editSlotTime', 'mealStart', 'mealEnd'];
-
-function prefersNativeTimeInput() {
-    return typeof window.matchMedia === 'function'
-        && window.matchMedia('(max-width: 768px)').matches;
-}
 
 function applyDesktopTimeHints(el) {
     if (!el || el.type !== 'text') return;
     el.placeholder = '12:20 또는 1220';
 }
 
-function clearDesktopTimeHints(el) {
-    if (!el) return;
-    el.removeAttribute('placeholder');
-}
-
 function initTimePickers() {
-    const native = prefersNativeTimeInput();
     TIME_PICKER_IDS.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        if (native) {
-            clearDesktopTimeHints(el);
-            el.type = 'time';
-            el.step = '300';
-        } else {
-            el.type = 'text';
-            el.removeAttribute('step');
-            applyDesktopTimeHints(el);
-        }
+        el.type = 'text';
+        el.removeAttribute('step');
+        applyDesktopTimeHints(el);
     });
 }
 

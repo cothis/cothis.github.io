@@ -85,21 +85,26 @@
             </div>
             <div class="schedule-settings-col">
                 <label for="targetCount">목표 개수</label>
-                <select id="targetCount">
-                    <option value="2">2개</option>
-                    <option value="3" selected>3개</option>
-                    <option value="4">4개</option>
-                </select>
+                <input type="number" id="targetCount" min="1" step="1" value="3" inputmode="numeric" autocomplete="off">
             </div>
         </div>
 
         <label>🧩 테마 선택 (중복 선택 가능)</label>
-        <div style="display:flex; gap:8px; align-items:center; margin:6px 0;">
-            <label for="listDayType" style="margin:0;">조회 요일</label>
-            <select id="listDayType" style="width:auto;">
-                <option value="평일" selected>평일</option>
-                <option value="주말">주말</option>
-            </select>
+        <div style="display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; margin:6px 0;">
+            <div style="display:flex; gap:8px; align-items:center;">
+                <label for="listDayType" style="margin:0;">조회 요일</label>
+                <select id="listDayType" style="width:auto;">
+                    <option value="평일" selected>평일</option>
+                    <option value="주말">주말</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <label for="themeListSort" style="margin:0;">목록 정렬</label>
+                <select id="themeListSort" style="width:auto;">
+                    <option value="name" selected>테마명 가나다순</option>
+                    <option value="shop">매장 가나다순</option>
+                </select>
+            </div>
         </div>
         <div id="consistencySummary" style="font-size:0.8rem; color:#64748b; margin:6px 0 6px 2px;"></div>
         <div id="themeSelector" class="theme-selector">
@@ -115,13 +120,13 @@
             <div id="themeOrderPanel"></div>
         </div>
 
-        <div style="display:flex; gap:10px;">
-            <div style="flex:1;">
-                <label>동일매장 간격</label>
-                <input type="number" id="sameGap" value="10">
+        <div class="schedule-settings-row schedule-gap-row">
+            <div class="schedule-settings-col">
+                <label for="sameGap">동일매장 간격 <small style="font-weight:500;color:#94a3b8;">(분 · 음수 가능 · 기본값, 아래 테마별로 덮어쓰기)</small></label>
+                <input type="number" id="sameGap" value="10" step="1">
             </div>
-            <div style="flex:1;">
-                <label>타매장 간격</label>
+            <div class="schedule-settings-col">
+                <label for="diffGap">타매장 간격</label>
                 <input type="number" id="diffGap" value="25">
             </div>
         </div>

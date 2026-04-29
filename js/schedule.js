@@ -1,12 +1,21 @@
+function resolveSameShopGapMinutes(prevKey, currKey, globalSame, overrideMap) {
+    if (overrideMap && Number.isFinite(overrideMap[currKey])) return overrideMap[currKey];
+    if (prevKey != null && overrideMap && Number.isFinite(overrideMap[prevKey])) return overrideMap[prevKey];
+    return globalSame;
+}
+
 function runCalculation() {
     const rawSelected = Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value);
     const selectedKeys = [...new Set(rawSelected)];
     const targetCount = parseInt(document.getElementById('targetCount').value, 10);
     const startTimeLimit = document.getElementById('startTime').value;
-    const sameGap = Math.max(0, parseInt(document.getElementById('sameGap').value, 10) || 10);
+    const sameGapRaw = parseInt(document.getElementById('sameGap').value, 10);
+    const sameGap = Number.isFinite(sameGapRaw) ? sameGapRaw : 10;
     const diffGap = Math.max(0, parseInt(document.getElementById('diffGap').value, 10) || 25);
+    const sameGapOverrides =
+        typeof readThemeSameGapOverridesFromDom === 'function' ? readThemeSameGapOverridesFromDom() : {};
 
-    if (!Number.isFinite(targetCount) || targetCount < 2 || targetCount > 4) return alert('목표 개수(2~4)가 올바르지 않습니다.');
+    if (!Number.isFinite(targetCount) || targetCount < 1) return alert('목표 개수는 1 이상의 숫자로 입력하세요.');
     if (selectedKeys.length < targetCount) return alert(`최소 ${targetCount}개를 선택하세요.`);
 
     const mealEnabled = document.getElementById('mealEnabled')?.checked;
@@ -36,19 +45,19 @@ function runCalculation() {
     if (useFixedOrder) {
         const checked = new Set(selectedKeys);
         let order = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
-        const missing = selectedKeys.filter(k => !order.includes(k)).sort((a, b) => a.localeCompare(b));
+        const missing = selectedKeys.filter(k => !order.includes(k)).sort(compareThemeKeys);
         order = [...order, ...missing];
         if (order.length < targetCount) {
             alert(`지정 순서 모드: 체크한 테마가 목표 개수(${targetCount})보다 적습니다. 테마를 더 선택하거나 목표 개수를 줄이세요.`);
             return;
         }
         order = order.slice(0, targetCount);
-        findSchedule(0, [], null, null, order, sameGap, diffGap, validResults, mealRange, mealBreakMs);
+        findSchedule(0, [], null, null, order, sameGap, diffGap, sameGapOverrides, validResults, mealRange, mealBreakMs);
     } else {
         const combis = getCombinations(selectedKeys, targetCount);
         combis.forEach(set => {
             getPermutations(set).forEach(order => {
-                findSchedule(0, [], null, null, order, sameGap, diffGap, validResults, mealRange, mealBreakMs);
+                findSchedule(0, [], null, null, order, sameGap, diffGap, sameGapOverrides, validResults, mealRange, mealBreakMs);
             });
         });
     }
@@ -63,7 +72,7 @@ function runCalculation() {
  * 첫 테마 슬롯은 기존처럼 당일(기준일)만 사용 — 시작 가능 시각보다 이른 코스는 선택되지 않음.
  * 두 번째부터는 minStartMs 이후 earliestClockAtOrAfter로 맞추며, 다음 날로 넘길 때는 새벽(06:00 미만)만 허용.
  */
-function findSchedule(idx, currentSched, lastEndMs, lastShop, order, sameGap, diffGap, validResults, mealRange, mealBreakMs) {
+function findSchedule(idx, currentSched, lastEndMs, lastShop, order, sameGap, diffGap, sameGapOverrides, validResults, mealRange, mealBreakMs) {
     if (idx === order.length) {
         if (mealRange && mealBreakMs > 0 && !scheduleAllowsMealBreak(currentSched, mealRange, mealBreakMs)) {
             return;
@@ -81,7 +90,13 @@ function findSchedule(idx, currentSched, lastEndMs, lastShop, order, sameGap, di
     if (activeSlots.length === 0) return;
 
     const startTimeLimitMs = localDateFromHm(document.getElementById('startTime').value).getTime();
-    const gapMin = idx === 0 ? 0 : lastShop === data.shop ? sameGap : diffGap;
+    const prevKey = idx > 0 && currentSched.length ? currentSched[currentSched.length - 1].key : null;
+    const gapMin =
+        idx === 0
+            ? 0
+            : lastShop === data.shop
+              ? resolveSameShopGapMinutes(prevKey, key, sameGap, sameGapOverrides)
+              : diffGap;
     const minStartMs = idx === 0 ? startTimeLimitMs : lastEndMs + gapMin * 60000;
 
     const candidates = [];
@@ -113,7 +128,7 @@ function findSchedule(idx, currentSched, lastEndMs, lastShop, order, sameGap, di
             _startMs: startMs,
             _endMs: endMs
         });
-        findSchedule(idx + 1, currentSched, endMs, data.shop, order, sameGap, diffGap, validResults, mealRange, mealBreakMs);
+        findSchedule(idx + 1, currentSched, endMs, data.shop, order, sameGap, diffGap, sameGapOverrides, validResults, mealRange, mealBreakMs);
         currentSched.pop();
     });
 }

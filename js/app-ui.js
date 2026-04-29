@@ -1,3 +1,72 @@
+function loadThemeSameGapsFromStorage() {
+    try {
+        const s = localStorage.getItem(THEME_SAME_GAP_STORAGE_KEY);
+        if (!s) return;
+        const o = JSON.parse(s);
+        if (o && typeof o === 'object') themeSameGapByKey = o;
+    } catch (e) { /* ignore */ }
+}
+
+function saveThemeSameGapsToStorage() {
+    try {
+        localStorage.setItem(THEME_SAME_GAP_STORAGE_KEY, JSON.stringify(themeSameGapByKey));
+    } catch (e) { /* ignore */ }
+}
+
+/** 목록 갱신 직전 DOM 값을 themeSameGapByKey에 반영 */
+function snapshotThemeSameGapInputs() {
+    document.querySelectorAll('#themeSelector input.theme-same-gap-input').forEach(el => {
+        const k = el.dataset.themeKey;
+        if (!k) return;
+        const t = el.value.trim();
+        if (t === '') delete themeSameGapByKey[k];
+        else {
+            const v = parseInt(t, 10);
+            if (Number.isFinite(v)) themeSameGapByKey[k] = v;
+        }
+    });
+    saveThemeSameGapsToStorage();
+}
+
+/** 계산 시 사용: 빈 칸은 제외 */
+function readThemeSameGapOverridesFromDom() {
+    const out = {};
+    document.querySelectorAll('#themeSelector input.theme-same-gap-input').forEach(el => {
+        const k = el.dataset.themeKey;
+        if (!k || el.disabled) return;
+        const t = el.value.trim();
+        if (t === '') return;
+        const v = parseInt(t, 10);
+        if (Number.isFinite(v)) out[k] = v;
+    });
+    return out;
+}
+
+function saveSelectedThemeKeysToStorage() {
+    try {
+        const keys = Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value);
+        localStorage.setItem(SELECTED_THEME_KEYS_STORAGE_KEY, JSON.stringify(keys));
+    } catch (e) { /* ignore */ }
+}
+
+function loadThemeListSortFromStorage() {
+    try {
+        const v = localStorage.getItem(THEME_LIST_SORT_STORAGE_KEY);
+        if (v !== 'shop' && v !== 'name') return;
+        const el = document.getElementById('themeListSort');
+        if (el) el.value = v;
+    } catch (e) { /* ignore */ }
+}
+
+function saveThemeListSortToStorage() {
+    try {
+        const el = document.getElementById('themeListSort');
+        if (!el) return;
+        const v = el.value;
+        if (v === 'shop' || v === 'name') localStorage.setItem(THEME_LIST_SORT_STORAGE_KEY, v);
+    } catch (e) { /* ignore */ }
+}
+
 var START_TIME_KEY = 'epp.startTime';
 function saveStartTime() {
     try {
@@ -347,13 +416,45 @@ function viewSlots(key) {
     alert(`${t.name}·${t.dayType} (${t.shop}, ${t.duration}분)\n시간표: ${list || '없음'}`);
 }
 
+function getThemeListSortMode() {
+    const el = document.getElementById('themeListSort');
+    return el && el.value === 'shop' ? 'shop' : 'name';
+}
+
+function compareThemeKeys(ka, kb) {
+    const da = themeDB[ka];
+    const db = themeDB[kb];
+    if (!da || !db) return String(ka).localeCompare(String(kb), 'ko');
+    const mode = getThemeListSortMode();
+    if (mode === 'shop') {
+        const c = (da.shop || '').localeCompare(db.shop || '', 'ko');
+        if (c !== 0) return c;
+        return (da.name || '').localeCompare(db.name || '', 'ko');
+    }
+    const n = (da.name || '').localeCompare(db.name || '', 'ko');
+    if (n !== 0) return n;
+    return String(ka).localeCompare(String(kb), 'ko');
+}
+
 function renderThemeListFromDB() {
     const selector = document.getElementById('themeSelector');
+    snapshotThemeSameGapInputs();
     const listDayTypeEl = document.getElementById('listDayType');
     const selectedDayType = normalizeDayType(listDayTypeEl ? listDayTypeEl.value : '평일');
     const prevSelected = new Set(Array.from(selector.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value));
+    try {
+        const raw = localStorage.getItem(SELECTED_THEME_KEYS_STORAGE_KEY);
+        if (raw) {
+            const saved = JSON.parse(raw);
+            if (Array.isArray(saved)) {
+                saved.forEach(k => {
+                    if (themeDB[k]) prevSelected.add(k);
+                });
+            }
+        }
+    } catch (e) { /* ignore */ }
     selector.innerHTML = '';
-    const allEntries = Object.entries(themeDB).sort((a, b) => a[0].localeCompare(b[0]));
+    const allEntries = Object.entries(themeDB).sort((a, b) => compareThemeKeys(a[0], b[0]));
     const entries = allEntries.filter(([key, data]) => normalizeDayType(data.dayType) === selectedDayType);
     let invalidCount = 0;
     entries.forEach(([key, data]) => {
@@ -394,6 +495,26 @@ function renderThemeListFromDB() {
         });
         meta.appendChild(badges);
 
+        const gapRow = document.createElement('div');
+        gapRow.className = 'theme-same-gap-row';
+        const gapLabel = document.createElement('span');
+        gapLabel.className = 'theme-same-gap-label';
+        gapLabel.textContent = '동일매장 간격(분)';
+        gapLabel.title = '직전 코스와 같은 매장일 때 적용. 비우면 위쪽 일정 설정의 동일매장 간격 기본값.';
+        const gapInput = document.createElement('input');
+        gapInput.type = 'number';
+        gapInput.className = 'theme-same-gap-input';
+        gapInput.dataset.themeKey = key;
+        gapInput.step = '1';
+        gapInput.autocomplete = 'off';
+        gapInput.disabled = !ok;
+        if (Number.isFinite(themeSameGapByKey[key])) gapInput.value = String(themeSameGapByKey[key]);
+        gapInput.addEventListener('input', snapshotThemeSameGapInputs);
+        gapInput.addEventListener('change', snapshotThemeSameGapInputs);
+        gapRow.appendChild(gapLabel);
+        gapRow.appendChild(gapInput);
+        meta.appendChild(gapRow);
+
         row.appendChild(meta);
         selector.appendChild(row);
     });
@@ -412,6 +533,7 @@ function renderThemeListFromDB() {
     if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
 
     renderManagementBar();
+    saveSelectedThemeKeysToStorage();
 }
 
 function renderThemeOrderPanel() {
@@ -427,7 +549,7 @@ function renderThemeOrderPanel() {
 
     const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
     let ordered = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
-    const tail = [...checked].filter(k => !ordered.includes(k)).sort((a, b) => a.localeCompare(b));
+    const tail = [...checked].filter(k => !ordered.includes(k)).sort(compareThemeKeys);
     ordered = [...ordered, ...tail];
     themeOrderPreference = [...ordered, ...themeOrderPreference.filter(k => !ordered.includes(k))];
 
@@ -465,7 +587,7 @@ function escapeHtml(s) {
 function moveThemeOrder(key, delta) {
     const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
     let ordered = themeOrderPreference.filter(k => checked.has(k) && themeDB[k]);
-    const tail = [...checked].filter(k => !ordered.includes(k)).sort((a, b) => a.localeCompare(b));
+    const tail = [...checked].filter(k => !ordered.includes(k)).sort(compareThemeKeys);
     ordered = [...ordered, ...tail];
     const i = ordered.indexOf(key);
     if (i < 0) return;
@@ -487,6 +609,7 @@ function onThemeSelectorChange(e) {
         themeOrderPreference = themeOrderPreference.filter(k => k !== key);
     }
     if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
+    saveSelectedThemeKeysToStorage();
 }
 
 function setupFixedOrderUi() {
