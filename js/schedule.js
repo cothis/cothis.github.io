@@ -174,24 +174,15 @@ function runCalculation() {
 
     if (useFixedOrder) {
         const checked = new Set(selectedKeys);
-        const F = themeFixedOrderKeys.filter(k => checked.has(k) && themeDB[k]);
+        const enabled = new Set(themeFixedOrderEnabledKeys);
+        const F = themeFixedOrderKeys.filter(k => checked.has(k) && enabled.has(k) && themeDB[k]);
         if (F.length === 0) {
-            alert('지정 순서 모드: 아래 패널에서 순서에 넣을 테마를 추가하세요. (체크만으로는 적용되지 않습니다.)');
+            alert('지정 순서 모드: 아래 패널에서 순서를 고정할 테마를 체크하세요.');
             return;
         }
         if (F.length > targetCount) {
             alert(`지정 순서에 있는 테마가 목표 개수(${targetCount})보다 많습니다. 순서에서 빼거나 목표 개수를 늘리세요.`);
             return;
-        }
-        const posKeys = Object.keys(fixedPosOverrides).filter(k => F.includes(k));
-        if (posKeys.length > 0) {
-            for (let i = 0; i < posKeys.length; i++) {
-                const k = posKeys[i];
-                if (fixedPosOverrides[k] > targetCount) {
-                    alert(`${themeDB[k]?.name || k}의 지정 위치(${fixedPosOverrides[k]}번째)가 목표 개수(${targetCount})를 초과합니다.`);
-                    return;
-                }
-            }
         }
         const combis = getCombinationsContainingAll(selectedKeys, targetCount, new Set(F));
         if (combis.length === 0) {

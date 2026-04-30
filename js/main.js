@@ -1,5 +1,6 @@
 loadThemeSameGapsFromStorage();
 loadThemeFixedOrderFromStorage();
+loadThemeFixedOrderEnabledFromStorage();
 loadThemeFixedPositionsFromStorage();
 loadThemeListSortFromStorage();
 setupStartTimePersistence();

@@ -82,6 +82,25 @@ function saveThemeFixedOrderToStorage() {
     } catch (e) { /* ignore */ }
 }
 
+function loadThemeFixedOrderEnabledFromStorage() {
+    try {
+        const s = localStorage.getItem(THEME_FIXED_ORDER_ENABLED_STORAGE_KEY);
+        if (!s) {
+            // 신규 진입 시 기존 themeFixedOrderKeys를 활성 키로 초기화 (하위 호환)
+            themeFixedOrderEnabledKeys = [...themeFixedOrderKeys];
+            return;
+        }
+        const a = JSON.parse(s);
+        if (Array.isArray(a)) themeFixedOrderEnabledKeys = a.filter(k => typeof k === 'string');
+    } catch (e) { /* ignore */ }
+}
+
+function saveThemeFixedOrderEnabledToStorage() {
+    try {
+        localStorage.setItem(THEME_FIXED_ORDER_ENABLED_STORAGE_KEY, JSON.stringify(themeFixedOrderEnabledKeys));
+    } catch (e) { /* ignore */ }
+}
+
 function loadThemeFixedPositionsFromStorage() {
     try {
         const s = localStorage.getItem(THEME_FIXED_POSITION_STORAGE_KEY);
@@ -99,11 +118,14 @@ function saveThemeFixedPositionsToStorage() {
 
 function readThemeFixedPositionsFromDom() {
     const out = {};
-    document.querySelectorAll('.fixed-order-pos-input').forEach(el => {
-        const key = el.dataset.themeKey;
-        if (!key) return;
-        const v = parseInt((el.value || '').trim(), 10);
-        if (Number.isFinite(v) && v >= 1) out[key] = v;
+    const checkedInSelector = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
+    const ordered = themeFixedOrderKeys.filter(k => checkedInSelector.has(k) && themeDB[k]);
+    const enabledKeys = new Set(themeFixedOrderEnabledKeys);
+
+    ordered.forEach((key, idx) => {
+        if (enabledKeys.has(key)) {
+            out[key] = idx + 1;
+        }
     });
     return out;
 }
@@ -617,7 +639,17 @@ function renderThemeListFromDB() {
     rowsMeta.forEach(appendThemeRow);
 
     const checkedNow = Array.from(selector.querySelectorAll('input[type=checkbox]:checked')).map(el => el.value);
+    // 선택 해제된 테마 제거
     themeFixedOrderKeys = themeFixedOrderKeys.filter(k => checkedNow.includes(k) && themeDB[k]);
+    themeFixedOrderEnabledKeys = themeFixedOrderEnabledKeys.filter(k => checkedNow.includes(k));
+
+    // 새로 선택된 테마 추가 (순서 끝에)
+    checkedNow.forEach(k => {
+        if (!themeFixedOrderKeys.includes(k)) {
+            themeFixedOrderKeys.push(k);
+        }
+    });
+
     Object.keys(themeFixedPositionByKey).forEach(k => {
         if (!themeFixedOrderKeys.includes(k)) delete themeFixedPositionByKey[k];
     });
@@ -635,92 +667,58 @@ function renderThemeListFromDB() {
     renderSelectedThemeSummary();
     saveSelectedThemeKeysToStorage();
     saveThemeFixedOrderToStorage();
+    saveThemeFixedOrderEnabledToStorage();
     saveThemeFixedPositionsToStorage();
 }
 
 function renderThemeOrderPanel() {
     const wrap = document.getElementById('themeOrderPanelWrap');
     const panel = document.getElementById('themeOrderPanel');
-    const addSelect = document.getElementById('fixedOrderAddSelect');
-    const addBtn = document.getElementById('fixedOrderAddBtn');
     if (!wrap || !panel) return;
     const useFixed = document.getElementById('useFixedOrder')?.checked;
     wrap.style.display = useFixed ? 'block' : 'none';
     if (!useFixed) {
         panel.innerHTML = '';
-        if (addSelect) addSelect.innerHTML = '';
         return;
     }
 
     const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
     const ordered = themeFixedOrderKeys.filter(k => checked.has(k) && themeDB[k]);
 
-    if (addSelect) {
-        addSelect.innerHTML = '';
-        const opt0 = document.createElement('option');
-        opt0.value = '';
-        opt0.textContent = '순서에 넣을 테마 선택…';
-        addSelect.appendChild(opt0);
-        [...checked].sort(compareThemeKeys).forEach(k => {
-            if (ordered.includes(k)) return;
-            const d = themeDB[k];
-            if (!d) return;
-            const o = document.createElement('option');
-            o.value = k;
-            o.textContent = `${d.name} (${d.shop})`;
-            addSelect.appendChild(o);
-        });
-        if (addBtn) addBtn.disabled = addSelect.options.length <= 1;
-    }
-
     if (ordered.length === 0) {
         panel.innerHTML =
-            '<p style="font-size:0.85rem; color:#94a3b8; margin:0;">순서를 고정할 테마만 아래에서 추가하세요. 체크만으로는 포함되지 않습니다.</p>';
+            '<p style="font-size:0.85rem; color:#94a3b8; margin:0;">선택된 테마가 없습니다.</p>';
         return;
     }
     panel.innerHTML = '';
     ordered.forEach((key, idx) => {
         const data = themeDB[key];
         if (!data) return;
-        const posVal = Number.isFinite(parseInt(themeFixedPositionByKey[key], 10))
-            ? parseInt(themeFixedPositionByKey[key], 10)
-            : '';
+        const isEnabled = themeFixedOrderEnabledKeys.includes(key);
+
         const row = document.createElement('div');
         row.className = 'fixed-order-row';
         row.innerHTML = `
+                <input type="checkbox" class="fixed-order-enable-cb" data-theme-key="${escapeHtml(key)}" ${isEnabled ? 'checked' : ''} style="width:auto; margin:0;">
                 <span style="font-weight:700; color:#64748b; min-width:1.2rem;">${idx + 1}</span>
                 <span class="order-label"><strong>${escapeHtml(data.name)}</strong> <small style="color:#94a3b8;">(${escapeHtml(data.shop)})</small></span>
-                <label class="fixed-order-pos-wrap" title="비우면 상대순서만 고정, 숫자 입력 시 N번째 위치로 고정">
-                    <span>위치</span>
-                    <input type="number" class="fixed-order-pos-input" data-theme-key="${escapeHtml(key)}" min="1" step="1" value="${posVal}">
-                </label>
                 <button type="button" class="fixed-order-move" aria-label="위로">↑</button>
                 <button type="button" class="fixed-order-move" aria-label="아래로">↓</button>
-                <button type="button" class="fixed-order-remove" aria-label="제거">✕</button>
             `;
-        const [btnUp, btnDown, btnRm] = row.querySelectorAll('button');
-        const posInput = row.querySelector('.fixed-order-pos-input');
-        if (posInput) {
-            posInput.addEventListener('input', () => {
-                const v = parseInt((posInput.value || '').trim(), 10);
-                if (!Number.isFinite(v) || v < 1) delete themeFixedPositionByKey[key];
-                else themeFixedPositionByKey[key] = v;
-                saveThemeFixedPositionsToStorage();
-            });
-            posInput.addEventListener('change', () => {
-                const v = parseInt((posInput.value || '').trim(), 10);
-                if (!Number.isFinite(v) || v < 1) {
-                    delete themeFixedPositionByKey[key];
-                    posInput.value = '';
-                } else {
-                    themeFixedPositionByKey[key] = v;
-                }
-                saveThemeFixedPositionsToStorage();
-            });
-        }
+        
+        const enableCb = row.querySelector('.fixed-order-enable-cb');
+        enableCb.onchange = () => {
+            if (enableCb.checked) {
+                if (!themeFixedOrderEnabledKeys.includes(key)) themeFixedOrderEnabledKeys.push(key);
+            } else {
+                themeFixedOrderEnabledKeys = themeFixedOrderEnabledKeys.filter(k => k !== key);
+            }
+            saveThemeFixedOrderEnabledToStorage();
+        };
+
+        const [btnUp, btnDown] = row.querySelectorAll('button');
         btnUp.onclick = () => moveThemeOrder(key, -1);
         btnDown.onclick = () => moveThemeOrder(key, 1);
-        btnRm.onclick = () => removeThemeFromFixedOrder(key);
         panel.appendChild(row);
     });
 }
@@ -733,25 +731,16 @@ function escapeHtml(s) {
         .replace(/"/g, '&quot;');
 }
 
-function removeThemeFromFixedOrder(key) {
-    themeFixedOrderKeys = themeFixedOrderKeys.filter(k => k !== key);
-    saveThemeFixedOrderToStorage();
-    delete themeFixedPositionByKey[key];
-    saveThemeFixedPositionsToStorage();
-    renderThemeOrderPanel();
-}
-
 function moveThemeOrder(key, delta) {
-    const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
-    let ordered = themeFixedOrderKeys.filter(k => checked.has(k) && themeDB[k]);
-    const i = ordered.indexOf(key);
+    const i = themeFixedOrderKeys.indexOf(key);
     if (i < 0) return;
     const j = i + delta;
-    if (j < 0 || j >= ordered.length) return;
-    const t = ordered[i];
-    ordered[i] = ordered[j];
-    ordered[j] = t;
-    themeFixedOrderKeys = [...ordered, ...themeFixedOrderKeys.filter(k => !ordered.includes(k))];
+    if (j < 0 || j >= themeFixedOrderKeys.length) return;
+    
+    const t = themeFixedOrderKeys[i];
+    themeFixedOrderKeys[i] = themeFixedOrderKeys[j];
+    themeFixedOrderKeys[j] = t;
+    
     saveThemeFixedOrderToStorage();
     renderThemeOrderPanel();
 }
@@ -761,9 +750,14 @@ function onThemeSelectorChange(e) {
     const key = e.target.value;
     if (!e.target.checked) {
         themeFixedOrderKeys = themeFixedOrderKeys.filter(k => k !== key);
+        themeFixedOrderEnabledKeys = themeFixedOrderEnabledKeys.filter(k => k !== key);
         saveThemeFixedOrderToStorage();
+        saveThemeFixedOrderEnabledToStorage();
         delete themeFixedPositionByKey[key];
         saveThemeFixedPositionsToStorage();
+    } else {
+        if (!themeFixedOrderKeys.includes(key)) themeFixedOrderKeys.push(key);
+        saveThemeFixedOrderToStorage();
     }
     if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
     syncTargetCountWithSelection();
@@ -780,14 +774,6 @@ function setupFixedOrderUi() {
         if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
     });
     document.getElementById('themeSelector')?.addEventListener('change', onThemeSelectorChange);
-    document.getElementById('fixedOrderAddBtn')?.addEventListener('click', () => {
-        const sel = document.getElementById('fixedOrderAddSelect');
-        if (!sel || !sel.value) return;
-        const k = sel.value;
-        if (!themeFixedOrderKeys.includes(k)) themeFixedOrderKeys.push(k);
-        saveThemeFixedOrderToStorage();
-        renderThemeOrderPanel();
-    });
 }
 
 async function postToSheet(payload) {
