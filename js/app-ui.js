@@ -501,6 +501,14 @@ function compareThemeKeys(ka, kb) {
     return String(ka).localeCompare(String(kb), 'ko');
 }
 
+function parseThemeSearchTerms(raw) {
+    return String(raw || '')
+        .toLowerCase()
+        .split(/[,，]/)
+        .map(s => s.trim())
+        .filter(Boolean);
+}
+
 function renderSelectedThemeSummary() {
     const box = document.getElementById('selectedThemeSummary');
     if (!box) return;
@@ -535,7 +543,7 @@ function renderThemeListFromDB() {
     snapshotThemeSameGapInputs();
     const listDayTypeEl = document.getElementById('listDayType');
     const selectedDayType = normalizeDayType(listDayTypeEl ? listDayTypeEl.value : '평일');
-    const searchTerm = (document.getElementById('themeSearchInput')?.value || '').toLowerCase().trim();
+    const searchTerms = parseThemeSearchTerms(document.getElementById('themeSearchInput')?.value);
 
     const prevSelected = new Set(getSelectedThemeKeys());
     selector.innerHTML = '';
@@ -546,10 +554,10 @@ function renderThemeListFromDB() {
         const matchesDay = normalizeDayType(data.dayType) === selectedDayType;
         if (!matchesDay) return false;
 
-        if (!searchTerm) return true;
-        const nameMatch = (data.name || '').toLowerCase().includes(searchTerm);
-        const shopMatch = (data.shop || '').toLowerCase().includes(searchTerm);
-        return nameMatch || shopMatch;
+        if (searchTerms.length === 0) return true;
+        const name = (data.name || '').toLowerCase();
+        const shop = (data.shop || '').toLowerCase();
+        return searchTerms.some(term => name.includes(term) || shop.includes(term));
     });
 
     let invalidCount = 0;
