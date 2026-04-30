@@ -51,31 +51,6 @@
         </div>
     </div>
 
-    <div class="card" id="editSection" style="display:none;">
-        <h2>✏️ 테마 수정</h2>
-        <label for="editName">테마명</label>
-        <input type="text" id="editName" placeholder="테마명">
-        <label for="editShop">매장명</label>
-        <input type="text" id="editShop" placeholder="매장명">
-        <label for="editDuration">소요시간(분)</label>
-        <input type="number" id="editDuration" placeholder="소요시간 (분)">
-        <label for="editSlotTime">시간표 추가 <small style="font-weight:500;color:#94a3b8;">(클릭 또는 입력 · 24시간)</small></label>
-        <div class="slot-time-row" style="display:flex; gap:8px; align-items:center;">
-            <input type="text" id="editSlotTime" class="input-hhmm" placeholder="14:40" autocomplete="off" spellcheck="false" style="flex:1;">
-            <button class="btn btn-secondary" style="width:auto; padding:10px 12px;" onclick="addSlot('edit')">추가</button>
-        </div>
-        <div id="editSlotBadges" class="slot-badges" style="margin:8px 0 6px 0;"></div>
-        <small style="display:block; color:#64748b; margin:4px 0;">또는 CSV/공백으로 여러 시간 입력 가능</small>
-        <label for="editSlots">CSV/공백 입력</label>
-        <input type="text" id="editSlots" placeholder="예: 10:00, 10:30 11:00">
-        <button class="btn btn-secondary" style="margin-top:4px;" onclick="applyCsv('edit')">CSV 적용</button>
-        <div style="display:flex; gap:8px; margin-top:12px;">
-            <button class="btn" style="flex:1;" onclick="saveEdit()">저장</button>
-            <button class="btn btn-secondary" style="flex:1; background:#ef4444; color:white;" onclick="deleteFromEdit()">삭제</button>
-            <button class="btn btn-secondary" style="flex:1;" onclick="closeEditSection()">닫기</button>
-        </div>
-    </div>
-
     <div class="card">
         <h2>⚙️ 일정 설정</h2>
         <div class="schedule-settings-row">

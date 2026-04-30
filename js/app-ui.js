@@ -44,9 +44,37 @@ function readThemeSameGapOverridesFromDom() {
 
 function saveSelectedThemeKeysToStorage() {
     try {
-        const keys = Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value);
-        localStorage.setItem(SELECTED_THEME_KEYS_STORAGE_KEY, JSON.stringify(keys));
+        localStorage.setItem(SELECTED_THEME_KEYS_STORAGE_KEY, JSON.stringify(getSelectedThemeKeys()));
     } catch (e) { /* ignore */ }
+}
+
+function getStoredSelectedThemeKeys() {
+    try {
+        const raw = localStorage.getItem(SELECTED_THEME_KEYS_STORAGE_KEY);
+        if (!raw) return [];
+        const saved = JSON.parse(raw);
+        return Array.isArray(saved) ? saved.filter(k => typeof k === 'string') : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function isSelectableThemeKey(key) {
+    const data = themeDB[key];
+    if (!data) return false;
+    return validateTheme(
+        { name: data.name, shop: data.shop, duration: data.duration, slots: data.slots, dayType: data.dayType },
+        { allowExistingName: true }
+    ).ok;
+}
+
+function getSelectedThemeKeys() {
+    const keys = new Set(getStoredSelectedThemeKeys());
+    document.querySelectorAll('#themeSelector input[type="checkbox"]').forEach(el => {
+        if (el.checked) keys.add(el.value);
+        else keys.delete(el.value);
+    });
+    return [...keys].filter(isSelectableThemeKey);
 }
 
 function loadThemeListSortFromStorage() {
@@ -99,35 +127,6 @@ function saveThemeFixedOrderEnabledToStorage() {
     try {
         localStorage.setItem(THEME_FIXED_ORDER_ENABLED_STORAGE_KEY, JSON.stringify(themeFixedOrderEnabledKeys));
     } catch (e) { /* ignore */ }
-}
-
-function loadThemeFixedPositionsFromStorage() {
-    try {
-        const s = localStorage.getItem(THEME_FIXED_POSITION_STORAGE_KEY);
-        if (!s) return;
-        const o = JSON.parse(s);
-        if (o && typeof o === 'object') themeFixedPositionByKey = o;
-    } catch (e) { /* ignore */ }
-}
-
-function saveThemeFixedPositionsToStorage() {
-    try {
-        localStorage.setItem(THEME_FIXED_POSITION_STORAGE_KEY, JSON.stringify(themeFixedPositionByKey));
-    } catch (e) { /* ignore */ }
-}
-
-function readThemeFixedPositionsFromDom() {
-    const out = {};
-    const checkedInSelector = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
-    const ordered = themeFixedOrderKeys.filter(k => checkedInSelector.has(k) && themeDB[k]);
-    const enabledKeys = new Set(themeFixedOrderEnabledKeys);
-
-    ordered.forEach((key, idx) => {
-        if (enabledKeys.has(key)) {
-            out[key] = idx + 1;
-        }
-    });
-    return out;
 }
 
 var START_TIME_KEY = 'epp.startTime';
@@ -221,7 +220,6 @@ function setupStartTimePersistence() {
 function setupFiveMinuteEnforcement() {
     enforceFiveMinuteStepOn(document.getElementById('startTime'));
     enforceFiveMinuteStepOn(document.getElementById('newSlotTime'), { onEnter: () => addSlot('new') });
-    enforceFiveMinuteStepOn(document.getElementById('editSlotTime'), { onEnter: () => addSlot('edit') });
     enforceFiveMinuteStepOn(document.getElementById('mealStart'));
     enforceFiveMinuteStepOn(document.getElementById('mealEnd'));
 }
@@ -506,9 +504,7 @@ function compareThemeKeys(ka, kb) {
 function renderSelectedThemeSummary() {
     const box = document.getElementById('selectedThemeSummary');
     if (!box) return;
-    const keys = Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked'))
-        .map(el => el.value)
-        .filter(k => !!themeDB[k])
+    const keys = getSelectedThemeKeys()
         .sort(compareThemeKeys);
     if (keys.length === 0) {
         box.innerHTML = '';
@@ -530,7 +526,7 @@ function renderSelectedThemeSummary() {
 function syncTargetCountWithSelection() {
     const el = document.getElementById('targetCount');
     if (!el) return;
-    const n = document.querySelectorAll('#themeSelector input[type="checkbox"]:checked').length;
+    const n = getSelectedThemeKeys().length;
     el.value = String(Math.max(1, n));
 }
 
@@ -541,18 +537,7 @@ function renderThemeListFromDB() {
     const selectedDayType = normalizeDayType(listDayTypeEl ? listDayTypeEl.value : '평일');
     const searchTerm = (document.getElementById('themeSearchInput')?.value || '').toLowerCase().trim();
 
-    const prevSelected = new Set(Array.from(selector.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value));
-    try {
-        const raw = localStorage.getItem(SELECTED_THEME_KEYS_STORAGE_KEY);
-        if (raw) {
-            const saved = JSON.parse(raw);
-            if (Array.isArray(saved)) {
-                saved.forEach(k => {
-                    if (themeDB[k]) prevSelected.add(k);
-                });
-            }
-        }
-    } catch (e) { /* ignore */ }
+    const prevSelected = new Set(getSelectedThemeKeys());
     selector.innerHTML = '';
     const allEntries = Object.entries(themeDB).sort((a, b) => compareThemeKeys(a[0], b[0]));
 
@@ -638,20 +623,16 @@ function renderThemeListFromDB() {
 
     rowsMeta.forEach(appendThemeRow);
 
-    const checkedNow = Array.from(selector.querySelectorAll('input[type=checkbox]:checked')).map(el => el.value);
+    const selectedNow = getSelectedThemeKeys();
     // 선택 해제된 테마 제거
-    themeFixedOrderKeys = themeFixedOrderKeys.filter(k => checkedNow.includes(k) && themeDB[k]);
-    themeFixedOrderEnabledKeys = themeFixedOrderEnabledKeys.filter(k => checkedNow.includes(k));
+    themeFixedOrderKeys = themeFixedOrderKeys.filter(k => selectedNow.includes(k) && themeDB[k]);
+    themeFixedOrderEnabledKeys = themeFixedOrderEnabledKeys.filter(k => selectedNow.includes(k));
 
     // 새로 선택된 테마 추가 (순서 끝에)
-    checkedNow.forEach(k => {
+    selectedNow.forEach(k => {
         if (!themeFixedOrderKeys.includes(k)) {
             themeFixedOrderKeys.push(k);
         }
-    });
-
-    Object.keys(themeFixedPositionByKey).forEach(k => {
-        if (!themeFixedOrderKeys.includes(k)) delete themeFixedPositionByKey[k];
     });
 
     const sum = document.getElementById('consistencySummary');
@@ -668,7 +649,6 @@ function renderThemeListFromDB() {
     saveSelectedThemeKeysToStorage();
     saveThemeFixedOrderToStorage();
     saveThemeFixedOrderEnabledToStorage();
-    saveThemeFixedPositionsToStorage();
 }
 
 function renderThemeOrderPanel() {
@@ -682,7 +662,7 @@ function renderThemeOrderPanel() {
         return;
     }
 
-    const checked = new Set(Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value));
+    const checked = new Set(getSelectedThemeKeys());
     const ordered = themeFixedOrderKeys.filter(k => checked.has(k) && themeDB[k]);
 
     if (ordered.length === 0) {
@@ -753,8 +733,6 @@ function onThemeSelectorChange(e) {
         themeFixedOrderEnabledKeys = themeFixedOrderEnabledKeys.filter(k => k !== key);
         saveThemeFixedOrderToStorage();
         saveThemeFixedOrderEnabledToStorage();
-        delete themeFixedPositionByKey[key];
-        saveThemeFixedPositionsToStorage();
     } else {
         if (!themeFixedOrderKeys.includes(key)) themeFixedOrderKeys.push(key);
         saveThemeFixedOrderToStorage();
@@ -821,13 +799,6 @@ function closeEditSection() {
         sec.style.display = 'none';
         btn.innerText = '테마 등록';
     }
-}
-async function saveEdit() {
-    formMode = 'edit';
-    await saveThemeFromForm();
-}
-function deleteFromEdit() {
-    deleteFromForm();
 }
 
 function toggleSlot(key, slot) {

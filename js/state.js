@@ -2,7 +2,7 @@
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbygHe6RRs463-QPaJXASFgG0Ex0FCxEj0pDJwNksd0ST9eNXhPpbvWqgO7yOyIjM6IFOA/exec';
 var themeDB = {};
 var excludedSlots = {};
-/** 지정 순서 패널에 넣은 테마만 (순서 유지). 체크만으로는 자동 추가하지 않음 */
+/** 선택된 테마의 지정 순서(순서 유지) */
 var themeFixedOrderKeys = [];
 /** 지정 순서 패널에서 체크된 테마 키들 */
 var themeFixedOrderEnabledKeys = [];
@@ -13,9 +13,6 @@ var SELECTED_THEME_KEYS_STORAGE_KEY = 'epp.selectedThemeKeys';
 var THEME_LIST_SORT_STORAGE_KEY = 'epp.themeListSort';
 var THEME_FIXED_ORDER_STORAGE_KEY = 'epp.themeFixedOrderKeys';
 var THEME_FIXED_ORDER_ENABLED_STORAGE_KEY = 'epp.themeFixedOrderEnabledKeys';
-/** 순서 고정 테마의 "N번째" 절대 위치 제약(1-base) */
-var themeFixedPositionByKey = {};
-var THEME_FIXED_POSITION_STORAGE_KEY = 'epp.themeFixedPositions';
 var THEME_OVERRIDE_STORAGE_KEY = 'epp.themeDB_overrides';
 var formMode = 'add';
 var currentEditOldKey = null;

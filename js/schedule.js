@@ -26,55 +26,17 @@ function relaxationLowerBoundEndAfter(lastEndMs, lastKey, lastShop, fromIdx, ord
 }
 
 /**
- * 고정 상대순서 + 일부 절대 위치(1-base) 제약을 동시에 만족하는 모든 순서.
+ * 고정 상대순서를 만족하는 모든 순서.
  * 반환: { orders, error }  error가 있으면 조합 자체가 불가능.
  */
-function enumerateOrdersWithConstraints(allKeys, fixedOrdered, fixedPosMap, targetCount) {
+function enumerateOrdersWithConstraints(allKeys, fixedOrdered, targetCount) {
     const n = targetCount;
     const available = [...allKeys];
     const fixedSet = new Set(fixedOrdered);
-    const posToKey = new Map();
-
-    for (let i = 0; i < fixedOrdered.length; i++) {
-        const key = fixedOrdered[i];
-        const p1 = fixedPosMap && Number.isFinite(fixedPosMap[key]) ? fixedPosMap[key] : null;
-        if (p1 == null) continue;
-        if (p1 < 1 || p1 > n) {
-            return { orders: [], error: `지정 위치는 1~${n} 범위여야 합니다.` };
-        }
-        const p = p1 - 1;
-        if (posToKey.has(p) && posToKey.get(p) !== key) {
-            return { orders: [], error: `같은 위치(${p1}번째)에 테마를 2개 이상 고정할 수 없습니다.` };
-        }
-        posToKey.set(p, key);
-    }
-
-    for (let i = 0; i < fixedOrdered.length; i++) {
-        for (let j = i + 1; j < fixedOrdered.length; j++) {
-            const ki = fixedOrdered[i];
-            const kj = fixedOrdered[j];
-            const pi = fixedPosMap && Number.isFinite(fixedPosMap[ki]) ? fixedPosMap[ki] : null;
-            const pj = fixedPosMap && Number.isFinite(fixedPosMap[kj]) ? fixedPosMap[kj] : null;
-            if (pi != null && pj != null && pi > pj) {
-                return { orders: [], error: '고정 순서와 고정 위치가 충돌합니다. 위치를 조정하세요.' };
-            }
-        }
-    }
-
     const results = [];
     function rec(pos, rem, fixedCursor, path) {
         if (pos === n) {
             if (rem.length === 0 && fixedCursor === fixedOrdered.length) results.push(path.slice());
-            return;
-        }
-
-        const locked = posToKey.get(pos);
-        if (locked) {
-            if (!rem.includes(locked)) return;
-            if (fixedSet.has(locked) && fixedOrdered[fixedCursor] !== locked) return;
-            const nextRem = rem.filter(k => k !== locked);
-            const nextCur = fixedSet.has(locked) ? fixedCursor + 1 : fixedCursor;
-            rec(pos + 1, nextRem, nextCur, [...path, locked]);
             return;
         }
 
@@ -107,7 +69,10 @@ function getCombinationsContainingAll(arr, n, mustSet) {
 var MAX_SCHEDULE_ROOT_CALLS = 800000;
 
 function runCalculation() {
-    const rawSelected = Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value);
+    const rawSelected =
+        typeof getSelectedThemeKeys === 'function'
+            ? getSelectedThemeKeys()
+            : Array.from(document.querySelectorAll('#themeSelector input[type="checkbox"]:checked')).map(el => el.value);
     const selectedKeys = [...new Set(rawSelected)];
     const targetCount = parseInt(document.getElementById('targetCount').value, 10);
     const startTimeLimit = document.getElementById('startTime').value;
@@ -116,9 +81,6 @@ function runCalculation() {
     const diffGap = Math.max(0, parseInt(document.getElementById('diffGap').value, 10) || 25);
     const sameGapOverrides =
         typeof readThemeSameGapOverridesFromDom === 'function' ? readThemeSameGapOverridesFromDom() : {};
-    const fixedPosOverrides =
-        typeof readThemeFixedPositionsFromDom === 'function' ? readThemeFixedPositionsFromDom() : {};
-
     if (!Number.isFinite(targetCount) || targetCount < 1) return alert('목표 개수는 1 이상의 숫자로 입력하세요.');
     if (selectedKeys.length < targetCount) return alert(`최소 ${targetCount}개를 선택하세요.`);
 
@@ -192,7 +154,7 @@ function runCalculation() {
         for (let ci = 0; ci < combis.length && !hitRootLimit; ci++) {
             const combo = combis[ci];
             const fixedInCombo = F.filter(k => combo.includes(k));
-            const { orders, error } = enumerateOrdersWithConstraints(combo, fixedInCombo, fixedPosOverrides, targetCount);
+            const { orders, error } = enumerateOrdersWithConstraints(combo, fixedInCombo, targetCount);
             if (error) {
                 alert(error);
                 return;

@@ -329,7 +329,7 @@ function enforceFiveMinuteStepOn(el, options) {
 }
 
 /** 모든 환경에서 텍스트 입력(1220 등) + 포커스 아웃 시 5분 스냅 */
-const TIME_PICKER_IDS = ['startTime', 'newSlotTime', 'editSlotTime', 'mealStart', 'mealEnd'];
+const TIME_PICKER_IDS = ['startTime', 'newSlotTime', 'mealStart', 'mealEnd'];
 
 function applyDesktopTimeHints(el) {
     if (!el || el.type !== 'text') return;
