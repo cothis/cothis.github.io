@@ -852,15 +852,22 @@ function setLocalOverride(key, data) {
     localStorage.setItem(THEME_OVERRIDE_STORAGE_KEY, JSON.stringify(overrides));
 }
 
+function isThemeEqual(t1, t2) {
+    if (!t1 || !t2) return false;
+    if (t1.name !== t2.name || t1.dayType !== t2.dayType || t1.shop !== t2.shop || t1.duration !== t2.duration) return false;
+    if (Array.isArray(t1.slots) && Array.isArray(t2.slots)) {
+        if (t1.slots.length !== t2.slots.length) return false;
+        return t1.slots.every((v, i) => v === t2.slots[i]);
+    }
+    return false;
+}
+
 async function loadThemes() {
     const selector = document.getElementById('themeSelector');
     try {
-        // 1. data.json에서 데이터 로드
+        // 1. data.json에서 기본 데이터 로드
         const localRes = await fetch('data.json');
         const data = await localRes.json();
-
-        // 2. Apps Script 기록용 호출 (비동기로 던지고 응답은 무시)
-        fetch(SCRIPT_URL).catch(() => {});
 
         selector.innerHTML = '';
         themeDB = {};
@@ -874,8 +881,52 @@ async function loadThemes() {
             themeDB[key] = { name, dayType, shop: item.shop, duration, slots };
         });
 
-        // 3. 로컬 오버라이드 적용 (동기화 전 변경사항 반영)
+        // 로컬 데이터 먼저 표시 (빠른 피드백)
+        renderThemeListFromDB();
+
+        // 2. Apps Script에서 실시간 데이터 로드 (다른 사람이 추가한 데이터 포함)
+        try {
+            const remoteRes = await fetch(SCRIPT_URL);
+            if (remoteRes.ok) {
+                const remoteData = await remoteRes.json();
+                if (Array.isArray(remoteData)) {
+                    remoteData.forEach(item => {
+                        const slots = normalizeSlots(item.slots);
+                        const duration = parseInt(item.duration, 10);
+                        const dayType = normalizeDayType(item.dayType);
+                        const name = item.name;
+                        const key = makeKey(name, dayType);
+                        themeDB[key] = { name, dayType, shop: item.shop, duration, slots };
+                    });
+                }
+            }
+        } catch (re) {
+            console.error('Remote data load failed', re);
+        }
+
+        // 3. 로컬 오버라이드 최적화 (서버 데이터와 동일하면 로컬 기록 제거)
         const overrides = getLocalOverrides();
+        let changed = false;
+        Object.keys(overrides).forEach(k => {
+            const ov = overrides[k];
+            const base = themeDB[k];
+            if (ov === null) {
+                if (!base) {
+                    delete overrides[k];
+                    changed = true;
+                }
+            } else {
+                if (base && isThemeEqual(ov, base)) {
+                    delete overrides[k];
+                    changed = true;
+                }
+            }
+        });
+        if (changed) {
+            localStorage.setItem(THEME_OVERRIDE_STORAGE_KEY, JSON.stringify(overrides));
+        }
+
+        // 4. 남은 로컬 오버라이드 최종 적용
         Object.keys(overrides).forEach(k => {
             if (overrides[k] === null) {
                 delete themeDB[k];
@@ -884,8 +935,10 @@ async function loadThemes() {
             }
         });
 
+        // 실시간 데이터 및 오버라이드 반영하여 다시 렌더링
         renderThemeListFromDB();
     } catch (e) {
+        console.error('loadThemes Error:', e);
         selector.innerHTML = '<div class="loading-spinner">데이터를 불러오지 못했습니다.</div>';
     }
 }
