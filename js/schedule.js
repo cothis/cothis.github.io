@@ -26,13 +26,29 @@ function relaxationLowerBoundEndAfter(lastEndMs, lastKey, lastShop, fromIdx, ord
 }
 
 /**
- * 고정 상대순서를 만족하는 모든 순서.
+ * 고정 상대순서 + 체크된 행의 절대 위치(1-base)를 만족하는 모든 순서.
  * 반환: { orders, error }  error가 있으면 조합 자체가 불가능.
  */
-function enumerateOrdersWithConstraints(allKeys, fixedOrdered, targetCount) {
+function enumerateOrdersWithConstraints(allKeys, fixedOrdered, fixedPosMap, targetCount) {
     const n = targetCount;
     const available = [...allKeys];
     const fixedSet = new Set(fixedOrdered);
+    const posToKey = new Map();
+
+    for (let i = 0; i < fixedOrdered.length; i++) {
+        const key = fixedOrdered[i];
+        const p1 = fixedPosMap && Number.isFinite(fixedPosMap[key]) ? fixedPosMap[key] : null;
+        if (p1 == null) continue;
+        if (p1 < 1 || p1 > n) {
+            return { orders: [], error: `지정 위치는 1~${n} 범위여야 합니다.` };
+        }
+        const p = p1 - 1;
+        if (posToKey.has(p) && posToKey.get(p) !== key) {
+            return { orders: [], error: `같은 위치(${p1}번째)에 테마를 2개 이상 고정할 수 없습니다.` };
+        }
+        posToKey.set(p, key);
+    }
+
     const results = [];
     function rec(pos, rem, fixedCursor, path) {
         if (pos === n) {
@@ -40,8 +56,20 @@ function enumerateOrdersWithConstraints(allKeys, fixedOrdered, targetCount) {
             return;
         }
 
+        const locked = posToKey.get(pos);
+        if (locked) {
+            if (!rem.includes(locked)) return;
+            if (fixedSet.has(locked) && fixedOrdered[fixedCursor] !== locked) return;
+            const nextRem = rem.filter(k => k !== locked);
+            const nextCur = fixedSet.has(locked) ? fixedCursor + 1 : fixedCursor;
+            rec(pos + 1, nextRem, nextCur, [...path, locked]);
+            return;
+        }
+
         for (let i = 0; i < rem.length; i++) {
             const k = rem[i];
+            const fixedPos = fixedPosMap && Number.isFinite(fixedPosMap[k]) ? fixedPosMap[k] - 1 : null;
+            if (fixedPos != null && fixedPos !== pos) continue;
             if (fixedSet.has(k) && fixedOrdered[fixedCursor] !== k) continue;
             const nextRem = [...rem.slice(0, i), ...rem.slice(i + 1)];
             const nextCur = fixedSet.has(k) ? fixedCursor + 1 : fixedCursor;
@@ -81,6 +109,8 @@ function runCalculation() {
     const diffGap = Math.max(0, parseInt(document.getElementById('diffGap').value, 10) || 25);
     const sameGapOverrides =
         typeof readThemeSameGapOverridesFromDom === 'function' ? readThemeSameGapOverridesFromDom() : {};
+    const fixedPosOverrides =
+        typeof readThemeFixedPositionsFromState === 'function' ? readThemeFixedPositionsFromState() : {};
     if (!Number.isFinite(targetCount) || targetCount < 1) return alert('목표 개수는 1 이상의 숫자로 입력하세요.');
     if (selectedKeys.length < targetCount) return alert(`최소 ${targetCount}개를 선택하세요.`);
 
@@ -154,7 +184,7 @@ function runCalculation() {
         for (let ci = 0; ci < combis.length && !hitRootLimit; ci++) {
             const combo = combis[ci];
             const fixedInCombo = F.filter(k => combo.includes(k));
-            const { orders, error } = enumerateOrdersWithConstraints(combo, fixedInCombo, targetCount);
+            const { orders, error } = enumerateOrdersWithConstraints(combo, fixedInCombo, fixedPosOverrides, targetCount);
             if (error) {
                 alert(error);
                 return;

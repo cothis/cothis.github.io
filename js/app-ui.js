@@ -129,6 +129,18 @@ function saveThemeFixedOrderEnabledToStorage() {
     } catch (e) { /* ignore */ }
 }
 
+function readThemeFixedPositionsFromState() {
+    const out = {};
+    const selected = new Set(getSelectedThemeKeys());
+    const enabled = new Set(themeFixedOrderEnabledKeys);
+    const ordered = themeFixedOrderKeys.filter(k => selected.has(k) && themeDB[k]);
+
+    ordered.forEach((key, idx) => {
+        if (enabled.has(key)) out[key] = idx + 1;
+    });
+    return out;
+}
+
 var START_TIME_KEY = 'epp.startTime';
 function saveStartTime() {
     try {
@@ -845,7 +857,7 @@ async function loadThemes() {
     const selector = document.getElementById('themeSelector');
     try {
         // 1. data.json에서 기본 데이터 로드
-        const localRes = await fetch('data.json');
+        const localRes = await fetch(`data.json?v=${Date.now()}`, { cache: 'no-store' });
         const data = await localRes.json();
 
         selector.innerHTML = '';
@@ -865,7 +877,7 @@ async function loadThemes() {
 
         // 2. Apps Script에서 실시간 데이터 로드 (다른 사람이 추가한 데이터 포함)
         try {
-            const remoteRes = await fetch(SCRIPT_URL);
+            const remoteRes = await fetch(`${SCRIPT_URL}?v=${Date.now()}`, { cache: 'no-store' });
             if (remoteRes.ok) {
                 const remoteData = await remoteRes.json();
                 if (Array.isArray(remoteData)) {
