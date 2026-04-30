@@ -517,6 +517,8 @@ function renderThemeListFromDB() {
     snapshotThemeSameGapInputs();
     const listDayTypeEl = document.getElementById('listDayType');
     const selectedDayType = normalizeDayType(listDayTypeEl ? listDayTypeEl.value : '평일');
+    const searchTerm = (document.getElementById('themeSearchInput')?.value || '').toLowerCase().trim();
+
     const prevSelected = new Set(Array.from(selector.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value));
     try {
         const raw = localStorage.getItem(SELECTED_THEME_KEYS_STORAGE_KEY);
@@ -531,7 +533,18 @@ function renderThemeListFromDB() {
     } catch (e) { /* ignore */ }
     selector.innerHTML = '';
     const allEntries = Object.entries(themeDB).sort((a, b) => compareThemeKeys(a[0], b[0]));
-    const entries = allEntries.filter(([key, data]) => normalizeDayType(data.dayType) === selectedDayType);
+
+    // 필터링: 요일 + 검색어
+    const entries = allEntries.filter(([key, data]) => {
+        const matchesDay = normalizeDayType(data.dayType) === selectedDayType;
+        if (!matchesDay) return false;
+
+        if (!searchTerm) return true;
+        const nameMatch = (data.name || '').toLowerCase().includes(searchTerm);
+        const shopMatch = (data.shop || '').toLowerCase().includes(searchTerm);
+        return nameMatch || shopMatch;
+    });
+
     let invalidCount = 0;
 
     const rowsMeta = [];
@@ -759,6 +772,7 @@ function onThemeSelectorChange(e) {
 }
 
 function setupFixedOrderUi() {
+    document.getElementById('themeSearchInput')?.addEventListener('input', renderThemeListFromDB);
     document.getElementById('useFixedOrder')?.addEventListener('change', () => {
         renderThemeOrderPanel();
     });
