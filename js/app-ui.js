@@ -183,6 +183,11 @@ function setupRegistrantPersistence() {
     }
 }
 
+function normalizeRegistrantValue(value) {
+    const text = String(value || '').trim();
+    return text || '아마탱';
+}
+
 var MEAL_ENABLED_KEY = 'epp.mealEnabled';
 var MEAL_START_KEY = 'epp.mealStart';
 var MEAL_END_KEY = 'epp.mealEnd';
@@ -890,7 +895,7 @@ async function loadThemes() {
             const slots = normalizeSlots(item.slots);
             const duration = parseInt(item.duration, 10);
             const name = item.name;
-            const registrant = item.registrant || item.createdBy || item.author || '';
+            const registrant = normalizeRegistrantValue(item.registrant || item.createdBy || item.author);
             const key = makeKey(name);
             themeDB[key] = { name, shop: item.shop, registrant, duration, slots };
         });
@@ -908,7 +913,7 @@ async function loadThemes() {
                         const slots = normalizeSlots(item.slots);
                         const duration = parseInt(item.duration, 10);
                         const name = item.name;
-                        const registrant = item.registrant || item.createdBy || item.author || '';
+                        const registrant = normalizeRegistrantValue(item.registrant || item.createdBy || item.author);
                         const key = makeKey(name);
                         themeDB[key] = { name, shop: item.shop, registrant, duration, slots };
                     });
