@@ -18,22 +18,26 @@ function normalizeSlots(slotsStr) {
     return unique;
 }
 
-function validateTheme({ name, shop, duration, slots, dayType }, options = {}) {
+function validateTheme({ name, shop, duration, slots, registrant }, options = {}) {
     const errors = [];
-    const out = { name: String(name || '').trim(), shop: String(shop || '').trim() };
-    out.dayType = normalizeDayType(dayType);
+    const out = {
+        name: String(name || '').trim(),
+        shop: String(shop || '').trim(),
+        registrant: String(registrant || '').trim()
+    };
     const d = parseInt(duration, 10);
     if (!out.name) errors.push('테마명이 비어있습니다.');
     if (!out.shop) errors.push('매장명이 비어있습니다.');
+    if (options.requireRegistrant && !out.registrant) errors.push('등록자명이 비어있습니다.');
     if (!Number.isFinite(d) || d <= 0) errors.push('소요시간은 1 이상의 정수여야 합니다.');
     out.duration = Number.isFinite(d) && d > 0 ? d : NaN;
     const normSlots = Array.isArray(slots) ? slots : normalizeSlots(slots);
     if (normSlots.length === 0) errors.push('올바른 시간표(HH:MM)가 1개 이상 필요합니다.');
     out.slots = normSlots;
-    const key = makeKey(out.name, out.dayType);
+    const key = makeKey(out.name);
     if (options && options.existingKeys) {
         const exists = options.existingKeys.has(key);
-        if (exists && !options.allowExistingName) errors.push('이미 같은 이름/요일 조합이 존재합니다.');
+        if (exists && !options.allowExistingName) errors.push('이미 같은 이름의 테마가 존재합니다.');
     }
     return { ok: errors.length === 0, errors, normalized: out };
 }

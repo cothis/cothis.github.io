@@ -1,13 +1,14 @@
 loadThemeSameGapsFromStorage();
+clearStoredSelectedThemeKeys();
 loadThemeFixedOrderFromStorage();
 loadThemeFixedOrderEnabledFromStorage();
 loadThemeListSortFromStorage();
 setupStartTimePersistence();
+setupRegistrantPersistence();
 setupMealUi();
 initTimePickers();
 setupFiveMinuteEnforcement();
 setupFixedOrderUi();
-document.getElementById('listDayType')?.addEventListener('change', renderThemeListFromDB);
 document.getElementById('themeListSort')?.addEventListener('change', () => {
     saveThemeListSortToStorage();
     renderThemeListFromDB();

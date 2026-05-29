@@ -1,0 +1,4 @@
+.clasp.json
+apps-script/Code.gs
+apps-script/.env
+apps-script/local.properties.json

@@ -195,18 +195,11 @@ function scheduleAllowsMealBreak(schedule, mealRange, breakMs) {
     return true;
 }
 
-var DAY_TYPES = ['평일', '주말'];
-function normalizeDayType(v) {
-    const s = String(v || '').trim();
-    return DAY_TYPES.includes(s) ? s : '평일';
-}
-function makeKey(name, dayType) {
-    return `${name}::${normalizeDayType(dayType)}`;
+function makeKey(name) {
+    return String(name || '').trim();
 }
 function parseKey(key) {
-    const i = key.lastIndexOf('::');
-    if (i < 0) return { name: key, dayType: '평일' };
-    return { name: key.slice(0, i), dayType: key.slice(i + 2) };
+    return { name: String(key || '').split('::')[0] };
 }
 
 /**

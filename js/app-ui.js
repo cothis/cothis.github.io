@@ -44,37 +44,37 @@ function readThemeSameGapOverridesFromDom() {
 
 function saveSelectedThemeKeysToStorage() {
     try {
-        localStorage.setItem(SELECTED_THEME_KEYS_STORAGE_KEY, JSON.stringify(getSelectedThemeKeys()));
+        selectedThemeKeysInMemory = getSelectedThemeKeysFromDom();
+        localStorage.removeItem(SELECTED_THEME_KEYS_STORAGE_KEY);
     } catch (e) { /* ignore */ }
 }
 
-function getStoredSelectedThemeKeys() {
+function clearStoredSelectedThemeKeys() {
     try {
-        const raw = localStorage.getItem(SELECTED_THEME_KEYS_STORAGE_KEY);
-        if (!raw) return [];
-        const saved = JSON.parse(raw);
-        return Array.isArray(saved) ? saved.filter(k => typeof k === 'string') : [];
-    } catch (e) {
-        return [];
-    }
+        localStorage.removeItem(SELECTED_THEME_KEYS_STORAGE_KEY);
+    } catch (e) { /* ignore */ }
 }
 
 function isSelectableThemeKey(key) {
     const data = themeDB[key];
     if (!data) return false;
     return validateTheme(
-        { name: data.name, shop: data.shop, duration: data.duration, slots: data.slots, dayType: data.dayType },
+        { name: data.name, shop: data.shop, duration: data.duration, slots: data.slots, registrant: data.registrant },
         { allowExistingName: true }
     ).ok;
 }
 
-function getSelectedThemeKeys() {
-    const keys = new Set(getStoredSelectedThemeKeys());
+function getSelectedThemeKeysFromDom() {
+    const keys = new Set(selectedThemeKeysInMemory);
     document.querySelectorAll('#themeSelector input[type="checkbox"]').forEach(el => {
         if (el.checked) keys.add(el.value);
         else keys.delete(el.value);
     });
     return [...keys].filter(isSelectableThemeKey);
+}
+
+function getSelectedThemeKeys() {
+    return getSelectedThemeKeysFromDom();
 }
 
 function loadThemeListSortFromStorage() {
@@ -157,6 +157,30 @@ function restoreStartTime() {
         const el = document.getElementById('startTime');
         if (el) el.value = saved;
     } catch (e) { /* ignore */ }
+}
+
+function saveRegistrant() {
+    try {
+        const el = document.getElementById('newRegistrant');
+        if (!el) return;
+        localStorage.setItem(REGISTRANT_STORAGE_KEY, el.value || '');
+    } catch (e) { /* storage disabled */ }
+}
+function restoreRegistrant() {
+    try {
+        const saved = localStorage.getItem(REGISTRANT_STORAGE_KEY);
+        if (saved === null) return;
+        const el = document.getElementById('newRegistrant');
+        if (el) el.value = saved;
+    } catch (e) { /* ignore */ }
+}
+function setupRegistrantPersistence() {
+    restoreRegistrant();
+    const el = document.getElementById('newRegistrant');
+    if (el) {
+        el.addEventListener('change', saveRegistrant);
+        el.addEventListener('input', saveRegistrant);
+    }
 }
 
 var MEAL_ENABLED_KEY = 'epp.mealEnabled';
@@ -317,12 +341,10 @@ function removeSlot(prefix, t) {
 }
 
 function resetFormFields() {
-    ['newName', 'newShop', 'newDuration', 'newSlots', 'newSlotTime'].forEach(id => {
+    ['newName', 'newDuration', 'newSlots', 'newSlotTime'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
-    const dt = document.getElementById('newDayType');
-    if (dt) dt.value = '평일';
     const badgeWrap = document.getElementById('newSlotBadges');
     if (badgeWrap) badgeWrap.innerHTML = '';
 }
@@ -339,6 +361,7 @@ function setFormMode(mode, key) {
         if (saveBtn) saveBtn.textContent = '시트에 저장 및 새로고침';
         if (delBtn) delBtn.style.display = 'none';
         resetFormFields();
+        restoreRegistrant();
         renderSlotBadges('new');
     } else if (mode === 'edit') {
         const data = themeDB[key];
@@ -352,7 +375,8 @@ function setFormMode(mode, key) {
         if (delBtn) delBtn.style.display = 'block';
         document.getElementById('newName').value = data.name;
         document.getElementById('newShop').value = data.shop ?? '';
-        document.getElementById('newDayType').value = data.dayType ?? '평일';
+        const registrantEl = document.getElementById('newRegistrant');
+        if (registrantEl) registrantEl.value = data.registrant ?? '';
         document.getElementById('newDuration').value = data.duration ?? '';
         document.getElementById('newSlots').value = (data.slots || []).join(' ');
         renderSlotBadges('new');
@@ -365,24 +389,25 @@ function setFormMode(mode, key) {
 async function saveThemeFromForm() {
     const name = document.getElementById('newName').value;
     const shop = document.getElementById('newShop').value;
-    const dayType = document.getElementById('newDayType').value;
+    const registrant = document.getElementById('newRegistrant')?.value || '';
     const duration = document.getElementById('newDuration').value;
     const slots = document.getElementById('newSlots').value;
 
     if (formMode === 'add') {
         const existingKeys = new Set(Object.keys(themeDB));
-        const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots, dayType }, { existingKeys });
+        const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots, registrant }, { existingKeys, requireRegistrant: true });
         if (!ok) {
             alert(errors.join('\n'));
             return;
         }
-        const key = makeKey(normalized.name, normalized.dayType);
+        saveRegistrant();
+        const key = makeKey(normalized.name);
         
         // 로컬 즉시 반영
         const newTheme = {
             name: normalized.name,
-            dayType: normalized.dayType,
             shop: normalized.shop,
+            registrant: normalized.registrant,
             duration: normalized.duration,
             slots: normalized.slots
         };
@@ -398,22 +423,23 @@ async function saveThemeFromForm() {
                 action: 'add',
                 name: normalized.name,
                 shop: normalized.shop,
+                registrant: normalized.registrant,
                 duration: normalized.duration,
-                slots: normalized.slots.join(', '),
-                dayType: normalized.dayType
+                slots: normalized.slots.join(', ')
             };
             await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
         } catch (e) { console.error('Sheet Sync Fail', e); }
     } else {
         if (!currentEditOldKey) return alert('수정할 테마가 선택되지 않았습니다.');
         const existing = new Set(Object.keys(themeDB).filter(n => n !== currentEditOldKey));
-        const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots, dayType }, { existingKeys: existing });
+        const { ok, errors, normalized } = validateTheme({ name, shop, duration, slots, registrant }, { existingKeys: existing, requireRegistrant: true });
         if (!ok) {
             alert(errors.join('\n'));
             return;
         }
+        saveRegistrant();
         
-        const newKey = makeKey(normalized.name, normalized.dayType);
+        const newKey = makeKey(normalized.name);
         const renamed = newKey !== currentEditOldKey;
         
         if (renamed) {
@@ -423,8 +449,8 @@ async function saveThemeFromForm() {
         
         const updatedTheme = {
             name: normalized.name,
-            dayType: normalized.dayType,
             shop: normalized.shop,
+            registrant: normalized.registrant,
             duration: normalized.duration,
             slots: normalized.slots
         };
@@ -439,10 +465,9 @@ async function saveThemeFromForm() {
             const payload = {
                 action: 'update',
                 oldName: old.name,
-                oldDayType: old.dayType,
                 name: normalized.name,
-                dayType: normalized.dayType,
                 shop: normalized.shop,
+                registrant: normalized.registrant,
                 duration: normalized.duration,
                 slots: normalized.slots.join(', ')
             };
@@ -473,7 +498,7 @@ function deleteFromForm() {
 async function deleteTheme(key) {
     const t = themeDB[key];
     if (!t) return;
-    if (!confirm(`'${t.name}' (${t.dayType}) 테마를 삭제하시겠습니까?`)) return;
+    if (!confirm(`'${t.name}' 테마를 삭제하시겠습니까?`)) return;
     
     delete themeDB[key];
     if (typeof setLocalOverride === 'function') setLocalOverride(key, null); 
@@ -481,7 +506,7 @@ async function deleteTheme(key) {
     if (excludedSlots[key]) delete excludedSlots[key];
     renderThemeListFromDB();
     try {
-        const payload = { action: 'delete', name: t.name, dayType: t.dayType };
+        const payload = { action: 'delete', name: t.name };
         await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
     } catch (e) { console.error('Sheet Sync Fail', e); }
 }
@@ -490,7 +515,7 @@ function viewSlots(key) {
     const t = themeDB[key];
     if (!t) return alert('해당 테마를 찾을 수 없습니다.');
     const list = (t.slots || []).join(', ');
-    alert(`${t.name}·${t.dayType} (${t.shop}, ${t.duration}분)\n시간표: ${list || '없음'}`);
+    alert(`${t.name} (${t.shop}, ${t.duration}분)\n등록자: ${t.registrant || '-'}\n시간표: ${list || '없음'}`);
 }
 
 function getThemeListSortMode() {
@@ -553,23 +578,19 @@ function syncTargetCountWithSelection() {
 function renderThemeListFromDB() {
     const selector = document.getElementById('themeSelector');
     snapshotThemeSameGapInputs();
-    const listDayTypeEl = document.getElementById('listDayType');
-    const selectedDayType = normalizeDayType(listDayTypeEl ? listDayTypeEl.value : '평일');
     const searchTerms = parseThemeSearchTerms(document.getElementById('themeSearchInput')?.value);
 
     const prevSelected = new Set(getSelectedThemeKeys());
     selector.innerHTML = '';
     const allEntries = Object.entries(themeDB).sort((a, b) => compareThemeKeys(a[0], b[0]));
 
-    // 필터링: 요일 + 검색어
+    // 필터링: 검색어
     const entries = allEntries.filter(([key, data]) => {
-        const matchesDay = normalizeDayType(data.dayType) === selectedDayType;
-        if (!matchesDay) return false;
-
         if (searchTerms.length === 0) return true;
         const name = (data.name || '').toLowerCase();
         const shop = (data.shop || '').toLowerCase();
-        return searchTerms.some(term => name.includes(term) || shop.includes(term));
+        const registrant = (data.registrant || '').toLowerCase();
+        return searchTerms.some(term => name.includes(term) || shop.includes(term) || registrant.includes(term));
     });
 
     let invalidCount = 0;
@@ -577,7 +598,7 @@ function renderThemeListFromDB() {
     const rowsMeta = [];
     entries.forEach(([key, data]) => {
         const { ok, errors } = validateTheme(
-            { name: data.name, shop: data.shop, duration: data.duration, slots: data.slots, dayType: data.dayType },
+            { name: data.name, shop: data.shop, duration: data.duration, slots: data.slots, registrant: data.registrant },
             { allowExistingName: true }
         );
         if (!ok) invalidCount++;
@@ -600,7 +621,8 @@ function renderThemeListFromDB() {
         metaDiv.className = 'theme-meta';
         const title = document.createElement('div');
         const warn = ok ? '' : `(비정상: ${errors[0]})`;
-        title.innerHTML = `${data.name} <small style="color:#94a3b8">(${data.shop}, ${data.duration}분)</small> <span class="badge">${data.dayType}</span> ${ok ? '' : `<small style='color:#ef4444'>${warn}</small>`}`;
+        const registrantBadge = data.registrant ? ` <span class="badge">${escapeHtml(data.registrant)}</span>` : '';
+        title.innerHTML = `${escapeHtml(data.name)} <small style="color:#94a3b8">(${escapeHtml(data.shop)}, ${data.duration}분)</small>${registrantBadge} ${ok ? '' : `<small style='color:#ef4444'>${escapeHtml(warn)}</small>`}`;
         metaDiv.appendChild(title);
 
         const badges = document.createElement('div');
@@ -658,7 +680,7 @@ function renderThemeListFromDB() {
     const sum = document.getElementById('consistencySummary');
     const total = entries.length;
     sum.textContent = total
-        ? `${selectedDayType} 기준 총 ${total}개, 비정상 ${invalidCount}개 (비정상 항목은 선택 불가)`
+        ? `총 ${total}개, 비정상 ${invalidCount}개 (비정상 항목은 선택 불가)`
         : '';
 
     if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
@@ -793,7 +815,7 @@ function renderManagementBar() {
         const t = themeDB[k];
         const opt = document.createElement('option');
         opt.value = k;
-        opt.textContent = `${t.name} · ${t.dayType} (${t.shop})`;
+        opt.textContent = `${t.name} (${t.shop})`;
         sel.appendChild(opt);
     });
     if (prev && keys.includes(prev)) sel.value = prev;
@@ -845,7 +867,8 @@ function setLocalOverride(key, data) {
 
 function isThemeEqual(t1, t2) {
     if (!t1 || !t2) return false;
-    if (t1.name !== t2.name || t1.dayType !== t2.dayType || t1.shop !== t2.shop || t1.duration !== t2.duration) return false;
+    if (t1.name !== t2.name || t1.shop !== t2.shop || t1.duration !== t2.duration) return false;
+    if ((t1.registrant || '') !== (t2.registrant || '')) return false;
     if (Array.isArray(t1.slots) && Array.isArray(t2.slots)) {
         if (t1.slots.length !== t2.slots.length) return false;
         return t1.slots.every((v, i) => v === t2.slots[i]);
@@ -866,10 +889,10 @@ async function loadThemes() {
         data.forEach(item => {
             const slots = normalizeSlots(item.slots);
             const duration = parseInt(item.duration, 10);
-            const dayType = normalizeDayType(item.dayType);
             const name = item.name;
-            const key = makeKey(name, dayType);
-            themeDB[key] = { name, dayType, shop: item.shop, duration, slots };
+            const registrant = item.registrant || item.createdBy || item.author || '';
+            const key = makeKey(name);
+            themeDB[key] = { name, shop: item.shop, registrant, duration, slots };
         });
 
         // 로컬 데이터 먼저 표시 (빠른 피드백)
@@ -884,10 +907,10 @@ async function loadThemes() {
                     remoteData.forEach(item => {
                         const slots = normalizeSlots(item.slots);
                         const duration = parseInt(item.duration, 10);
-                        const dayType = normalizeDayType(item.dayType);
                         const name = item.name;
-                        const key = makeKey(name, dayType);
-                        themeDB[key] = { name, dayType, shop: item.shop, duration, slots };
+                        const registrant = item.registrant || item.createdBy || item.author || '';
+                        const key = makeKey(name);
+                        themeDB[key] = { name, shop: item.shop, registrant, duration, slots };
                     });
                 }
             }
@@ -899,6 +922,11 @@ async function loadThemes() {
         const overrides = getLocalOverrides();
         let changed = false;
         Object.keys(overrides).forEach(k => {
+            if (k.includes('::')) {
+                delete overrides[k];
+                changed = true;
+                return;
+            }
             const ov = overrides[k];
             const base = themeDB[k];
             if (ov === null) {

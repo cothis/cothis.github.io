@@ -20,11 +20,8 @@
         <input type="text" id="newName" placeholder="테마명 (예: CLAIM)">
         <label for="newShop">매장명</label>
         <input type="text" id="newShop" placeholder="매장명 (예: 키이스케이프 로그)">
-        <label for="newDayType">요일</label>
-        <select id="newDayType">
-            <option value="평일" selected>평일</option>
-            <option value="주말">주말</option>
-        </select>
+        <label for="newRegistrant">등록자명</label>
+        <input type="text" id="newRegistrant" placeholder="등록자명">
         <label for="newDuration">소요시간(분)</label>
         <input type="number" id="newDuration" placeholder="소요시간 (분)">
         <label for="newSlotTime">시간표 추가 <small style="font-weight:500;color:#94a3b8;">(클릭 또는 입력 · 24시간)</small></label>
@@ -66,13 +63,6 @@
 
         <label>🧩 테마 선택 (중복 선택 가능)</label>
         <div style="display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; margin:6px 0;">
-            <div style="display:flex; gap:8px; align-items:center;">
-                <label for="listDayType" style="margin:0;">조회 요일</label>
-                <select id="listDayType" style="width:auto;">
-                    <option value="평일" selected>평일</option>
-                    <option value="주말">주말</option>
-                </select>
-            </div>
             <div style="display:flex; gap:8px; align-items:center;">
                 <label for="themeListSort" style="margin:0;">목록 정렬</label>
                 <select id="themeListSort" style="width:auto;">

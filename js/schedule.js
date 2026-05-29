@@ -209,7 +209,7 @@ function runCalculation() {
         }
     }
     const mealRenderOpts = mealEnabled && mealRange
-        ? { mealRange, mealWindowLabel: `${mealStartVal}~${mealEndVal}` }
+        ? { mealRange, mealBreakMs, mealWindowLabel: `${mealStartVal}~${mealEndVal}` }
         : null;
     renderResults(validResults, mealRenderOpts, hitRootLimit ? { rootCalls: rootCalls.n, rootLimit: MAX_SCHEDULE_ROOT_CALLS } : null);
 }
@@ -297,7 +297,6 @@ function findSchedule(
         currentSched.push({
             key,
             name: data.name,
-            dayType: data.dayType,
             shop: data.shop,
             start: startStr,
             end: endStr,
@@ -350,7 +349,7 @@ function compareTimelineLex(a, b) {
 }
 
 /** 인접 테마 사이 구간이 (하루 이상) 설정한 식사 가능 시계 구간과 겹치면, 빈 시간 전체 prevEnd~nextStart 를 휴식·밥으로 표시 */
-function buildInterThemeMealRows(schedule, mealRange) {
+function buildInterThemeMealRows(schedule, mealRange, mealBreakMs) {
     if (!mealRange || !schedule || schedule.length < 2) return [];
     const sorted = [...schedule].sort((a, b) => a._startMs - b._startMs);
     const rows = [];
@@ -369,15 +368,19 @@ function buildInterThemeMealRows(schedule, mealRange) {
         b.setHours(0, 0, 0, 0);
         dayCandidates.add(b.getTime());
 
-        let overlaps = false;
+        let hasEnoughMealGap = false;
         for (const dayMs of dayCandidates) {
             const win = getMealWindowEpochForCalendarDay(dayMs, mealRange);
             if (!win) continue;
             const lo = Math.max(gapStart, win.winStart);
             const hi = Math.min(gapEnd, win.winEnd);
-            if (hi > lo) overlaps = true;
+            const overlapMs = hi - lo;
+            if (overlapMs > 0 && (!(mealBreakMs > 0) || overlapMs >= mealBreakMs)) {
+                hasEnoughMealGap = true;
+                break;
+            }
         }
-        if (!overlaps) continue;
+        if (!hasEnoughMealGap) continue;
 
         rows.push({
             startMs: gapStart,
@@ -445,7 +448,7 @@ function renderResults(results, mealRenderOpts, limitMeta) {
         }).map(s => ({ kind: 'theme', row: s }));
         const mealRows =
             mealRenderOpts && mealRenderOpts.mealRange
-                ? buildInterThemeMealRows(res.schedule, mealRenderOpts.mealRange)
+                ? buildInterThemeMealRows(res.schedule, mealRenderOpts.mealRange, mealRenderOpts.mealBreakMs)
                 : [];
         const rows = [...themeRows, ...mealRows.map(m => ({ kind: 'meal', row: m }))].sort((a, b) => {
             const ta = a.kind === 'meal' ? a.row.startMs : a.row._startMs;
