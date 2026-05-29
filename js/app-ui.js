@@ -42,19 +42,6 @@ function readThemeSameGapOverridesFromDom() {
     return out;
 }
 
-function saveSelectedThemeKeysToStorage() {
-    try {
-        selectedThemeKeysInMemory = getSelectedThemeKeysFromDom();
-        localStorage.removeItem(SELECTED_THEME_KEYS_STORAGE_KEY);
-    } catch (e) { /* ignore */ }
-}
-
-function clearStoredSelectedThemeKeys() {
-    try {
-        localStorage.removeItem(SELECTED_THEME_KEYS_STORAGE_KEY);
-    } catch (e) { /* ignore */ }
-}
-
 function isSelectableThemeKey(key) {
     const data = themeDB[key];
     if (!data) return false;
@@ -65,12 +52,7 @@ function isSelectableThemeKey(key) {
 }
 
 function getSelectedThemeKeysFromDom() {
-    const keys = new Set(selectedThemeKeysInMemory);
-    document.querySelectorAll('#themeSelector input[type="checkbox"]').forEach(el => {
-        if (el.checked) keys.add(el.value);
-        else keys.delete(el.value);
-    });
-    return [...keys].filter(isSelectableThemeKey);
+    return [...selectedThemeKeysSession].filter(isSelectableThemeKey);
 }
 
 function getSelectedThemeKeys() {
@@ -585,7 +567,7 @@ function renderThemeListFromDB() {
     snapshotThemeSameGapInputs();
     const searchTerms = parseThemeSearchTerms(document.getElementById('themeSearchInput')?.value);
 
-    const prevSelected = new Set(getSelectedThemeKeys());
+    const prevSelected = new Set(selectedThemeKeysSession);
     selector.innerHTML = '';
     const allEntries = Object.entries(themeDB).sort((a, b) => compareThemeKeys(a[0], b[0]));
 
@@ -619,7 +601,7 @@ function renderThemeListFromDB() {
         cb.type = 'checkbox';
         cb.value = key;
         cb.disabled = !ok;
-        if (prevSelected.has(key) && ok) cb.checked = true;
+        cb.checked = prevSelected.has(key) && ok;
         row.appendChild(cb);
 
         const metaDiv = document.createElement('div');
@@ -693,7 +675,6 @@ function renderThemeListFromDB() {
     renderManagementBar();
     syncTargetCountWithSelection();
     renderSelectedThemeSummary();
-    saveSelectedThemeKeysToStorage();
     saveThemeFixedOrderToStorage();
     saveThemeFixedOrderEnabledToStorage();
 }
@@ -776,18 +757,19 @@ function onThemeSelectorChange(e) {
     if (!e.target || e.target.type !== 'checkbox') return;
     const key = e.target.value;
     if (!e.target.checked) {
+        selectedThemeKeysSession.delete(key);
         themeFixedOrderKeys = themeFixedOrderKeys.filter(k => k !== key);
         themeFixedOrderEnabledKeys = themeFixedOrderEnabledKeys.filter(k => k !== key);
         saveThemeFixedOrderToStorage();
         saveThemeFixedOrderEnabledToStorage();
     } else {
+        selectedThemeKeysSession.add(key);
         if (!themeFixedOrderKeys.includes(key)) themeFixedOrderKeys.push(key);
         saveThemeFixedOrderToStorage();
     }
     if (document.getElementById('useFixedOrder')?.checked) renderThemeOrderPanel();
     syncTargetCountWithSelection();
     renderSelectedThemeSummary();
-    saveSelectedThemeKeysToStorage();
 }
 
 function setupFixedOrderUi() {

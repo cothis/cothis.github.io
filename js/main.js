@@ -1,5 +1,4 @@
 loadThemeSameGapsFromStorage();
-clearStoredSelectedThemeKeys();
 loadThemeFixedOrderFromStorage();
 loadThemeFixedOrderEnabledFromStorage();
 loadThemeListSortFromStorage();
