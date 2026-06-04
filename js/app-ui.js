@@ -125,24 +125,24 @@ function readThemeFixedPositionsFromState() {
 
 var START_TIME_KEY = 'epp.startTime';
 
-function normalizedStartTimeFromInput(raw) {
+/** 저장값 복원용 — 입력 중에는 호출하지 않음 (1220·17 등을 입력 도중에 펼치지 않기 위함) */
+function parseStoredStartTime(raw) {
     let v = String(raw || '').trim();
     if (!v) return '';
+    if (isValidTimeStr(v)) return v;
     const expanded = normalizeTimeInputString(v);
-    if (expanded) v = expanded;
-    if (!isValidTimeStr(v)) return '';
-    return isFiveMinuteTime(v) ? v : roundTo5MinutesStr(v);
+    if (expanded && isValidTimeStr(expanded)) return expanded;
+    return '';
 }
 
-/** 5분 스냅 이후에 호출 — 유효한 HH:MM만 localStorage에 저장 */
+/** blur/change·5분 스냅 이후 — 필드 값을 바꾸지 않고 유효할 때만 저장 */
 function persistStartTimeFromEl() {
     try {
         const el = document.getElementById('startTime');
         if (!el) return;
-        const normalized = normalizedStartTimeFromInput(el.value);
-        if (!normalized || !isValidTimeStr(normalized)) return;
-        if (el.value !== normalized) el.value = normalized;
-        localStorage.setItem(START_TIME_KEY, normalized);
+        const v = (el.value || '').trim();
+        if (!isValidTimeStr(v)) return;
+        localStorage.setItem(START_TIME_KEY, v);
     } catch (e) { /* storage disabled */ }
 }
 
@@ -154,10 +154,12 @@ function restoreStartTime() {
     try {
         const saved = localStorage.getItem(START_TIME_KEY);
         if (!saved) return;
-        const normalized = normalizedStartTimeFromInput(saved);
-        if (!normalized || !isValidTimeStr(normalized)) return;
+        let v = parseStoredStartTime(saved);
+        if (!v) return;
+        if (!isFiveMinuteTime(v)) v = roundTo5MinutesStr(v);
+        if (!isValidTimeStr(v)) return;
         const el = document.getElementById('startTime');
-        if (el) el.value = normalized;
+        if (el) el.value = v;
     } catch (e) { /* ignore */ }
 }
 
@@ -257,10 +259,6 @@ function setupStartTimePersistence() {
     if (el) {
         el.addEventListener('change', schedulePersistStartTime);
         el.addEventListener('blur', schedulePersistStartTime);
-        el.addEventListener('input', () => {
-            const v = normalizedStartTimeFromInput(el.value);
-            if (v && isValidTimeStr(v)) persistStartTimeFromEl();
-        });
     }
 }
 
