@@ -2,11 +2,11 @@ loadThemeSameGapsFromStorage();
 loadThemeFixedOrderFromStorage();
 loadThemeFixedOrderEnabledFromStorage();
 loadThemeListSortFromStorage();
-setupStartTimePersistence();
 setupRegistrantPersistence();
 setupMealUi();
 initTimePickers();
 setupFiveMinuteEnforcement();
+setupStartTimePersistence();
 setupFixedOrderUi();
 document.getElementById('themeListSort')?.addEventListener('change', () => {
     saveThemeListSortToStorage();

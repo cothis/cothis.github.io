@@ -217,7 +217,7 @@ function runCalculation() {
 /**
  * lastEndMs: 직전 테마 종료 시각(epoch). 첫 테마에서는 null.
  * 첫 테마 슬롯은 기존처럼 당일(기준일)만 사용 — 시작 가능 시각보다 이른 코스는 선택되지 않음.
- * 두 번째부터는 minStartMs 이후 earliestClockAtOrAfter로 맞추며, 다음 날로 넘길 때는 새벽(06:00 미만)만 허용.
+ * 두 번째부터는 minStartMs 이후 earliestClockAtOrAfter로 맞추며, 기준일 다음날부터는 새벽(06:00 미만) 시작만 허용.
  */
 function findSchedule(
     idx,
@@ -253,6 +253,7 @@ function findSchedule(
     if (activeSlots.length === 0) return;
 
     const startTimeLimitMs = localDateFromHm(document.getElementById('startTime').value).getTime();
+    const anchorDayMs = calendarDayMs(startTimeLimitMs);
     const prevKey = idx > 0 && currentSched.length ? currentSched[currentSched.length - 1].key : null;
     const gapMin =
         idx === 0
@@ -270,7 +271,7 @@ function findSchedule(
             if (cand < minStartMs) return;
             startMs = cand;
         } else {
-            startMs = earliestClockAtOrAfter(minStartMs, slot);
+            startMs = earliestClockAtOrAfter(minStartMs, slot, anchorDayMs);
             if (!Number.isFinite(startMs)) return;
         }
         const endMs = startMs + data.duration * 60000;

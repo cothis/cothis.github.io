@@ -28,25 +28,45 @@ function formatHmFromMs(ms) {
     return `${h}:${m}`;
 }
 
+/** epoch ms가 속한 로컬 달력일의 자정(ms) */
+function calendarDayMs(ms) {
+    if (!Number.isFinite(ms)) return NaN;
+    const d = new Date(ms);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+}
+
+/** 기준일 다음날부터는 새벽(06:00 미만) 시작 슬롯만 허용 — 23시대 코스가 자정 넘어 종료되는 것은 가능 */
+const NEXT_DAY_SLOT_CUTOFF_MINS = 6 * 60;
+
+function isSlotAllowedOnCalendarDay(slotMins, dayMs, anchorDayMs) {
+    if (!Number.isFinite(anchorDayMs) || !Number.isFinite(dayMs)) return true;
+    if (dayMs <= anchorDayMs) return true;
+    return slotMins < NEXT_DAY_SLOT_CUTOFF_MINS;
+}
+
 /**
  * minStartMs 이후로 등장하는 가장 이른 시각 중, 시계가 hhmm인 인스턴트(ms).
- * 당일 같은 시각이 minStart보다 이르면 다음 날만 시도하되,
- * 그때는 새벽(06:00 미만)만 허용한다. 전날 저녁 이후에 ‘다음날 오전·낮’ 슬롯이 붙는 비현실적인 조합을 막는다.
+ * anchorDayMs(시작 가능 시간의 달력일)보다 뒤 날짜에 잡히는 슬롯은 06:00 미만만 허용.
+ * 당일 시각이 minStart보다 이르면 다음 날도 같은 규칙으로 시도한다.
  */
-function earliestClockAtOrAfter(minStartMs, hhmm) {
+function earliestClockAtOrAfter(minStartMs, hhmm, anchorDayMs) {
     if (!isValidTimeStr(hhmm)) return NaN;
     const [hc, mc] = hhmm.split(':').map(Number);
     const slotMins = hc * 60 + mc;
     const t = new Date(minStartMs);
     t.setHours(hc, mc, 0, 0);
     const tSame = t.getTime();
-    if (tSame >= minStartMs) return tSame;
+    if (tSame >= minStartMs) {
+        if (!isSlotAllowedOnCalendarDay(slotMins, calendarDayMs(tSame), anchorDayMs)) return NaN;
+        return tSame;
+    }
     const tNext = new Date(minStartMs);
     tNext.setDate(tNext.getDate() + 1);
     tNext.setHours(hc, mc, 0, 0);
     const tNextMs = tNext.getTime();
     if (tNextMs < minStartMs) return NaN;
-    if (slotMins >= 6 * 60) return NaN;
+    if (!isSlotAllowedOnCalendarDay(slotMins, calendarDayMs(tNextMs), anchorDayMs)) return NaN;
     return tNextMs;
 }
 

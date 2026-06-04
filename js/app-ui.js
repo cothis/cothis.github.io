@@ -124,20 +124,40 @@ function readThemeFixedPositionsFromState() {
 }
 
 var START_TIME_KEY = 'epp.startTime';
-function saveStartTime() {
+
+function normalizedStartTimeFromInput(raw) {
+    let v = String(raw || '').trim();
+    if (!v) return '';
+    const expanded = normalizeTimeInputString(v);
+    if (expanded) v = expanded;
+    if (!isValidTimeStr(v)) return '';
+    return isFiveMinuteTime(v) ? v : roundTo5MinutesStr(v);
+}
+
+/** 5분 스냅 이후에 호출 — 유효한 HH:MM만 localStorage에 저장 */
+function persistStartTimeFromEl() {
     try {
         const el = document.getElementById('startTime');
-        if (!el || !el.value) return;
-        localStorage.setItem(START_TIME_KEY, el.value);
+        if (!el) return;
+        const normalized = normalizedStartTimeFromInput(el.value);
+        if (!normalized || !isValidTimeStr(normalized)) return;
+        if (el.value !== normalized) el.value = normalized;
+        localStorage.setItem(START_TIME_KEY, normalized);
     } catch (e) { /* storage disabled */ }
 }
+
+function schedulePersistStartTime() {
+    setTimeout(persistStartTimeFromEl, 0);
+}
+
 function restoreStartTime() {
     try {
         const saved = localStorage.getItem(START_TIME_KEY);
         if (!saved) return;
-        if (!isValidTimeStr(saved)) return;
+        const normalized = normalizedStartTimeFromInput(saved);
+        if (!normalized || !isValidTimeStr(normalized)) return;
         const el = document.getElementById('startTime');
-        if (el) el.value = saved;
+        if (el) el.value = normalized;
     } catch (e) { /* ignore */ }
 }
 
@@ -235,8 +255,12 @@ function setupStartTimePersistence() {
     restoreStartTime();
     const el = document.getElementById('startTime');
     if (el) {
-        el.addEventListener('change', saveStartTime);
-        el.addEventListener('input', saveStartTime);
+        el.addEventListener('change', schedulePersistStartTime);
+        el.addEventListener('blur', schedulePersistStartTime);
+        el.addEventListener('input', () => {
+            const v = normalizedStartTimeFromInput(el.value);
+            if (v && isValidTimeStr(v)) persistStartTimeFromEl();
+        });
     }
 }
 
